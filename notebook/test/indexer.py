@@ -37,27 +37,39 @@ def index_file(path, batch_size=8):
         metadata={"hnsw:space": "cosine"}
     )
 
-    for i in range(0, len(chunks), batch_size):
-        batch_chunks = chunks[i:i + batch_size]
-        batch_ids = ids[i:i + batch_size]
-        batch_metas = metas[i:i + batch_size]
+    # ============================
+    # 1. LƯU PAGE (1 PAGE = 1 DOC)
+    # ============================
 
-        emb = embed_texts(batch_chunks)
+    page_ids = [f"page_{i}" for i in range(len(pages))]
+    page_metas = [{"type": "page", "page": i} for i in range(len(pages))]
+    page_embs = embed_texts(pages)
+
+    collection.add(
+        ids=page_ids,
+        documents=pages,
+        metadatas=page_metas,
+        embeddings=page_embs
+    )
+
+    # ============================
+    # 2. LƯU CHUNKS
+    # ============================
+
+    for i in range(0, len(chunks), batch_size):
+        emb = embed_texts(chunks[i:i + batch_size])
 
         collection.add(
-            ids=batch_ids,
-            documents=batch_chunks,
-            metadatas=batch_metas,
+            ids=ids[i:i + batch_size],
+            documents=chunks[i:i + batch_size],
+            metadatas=metas[i:i + batch_size],
             embeddings=emb
         )
 
         if device == "cuda":
             torch.cuda.empty_cache()
 
-    # ❌ KHÔNG CẦN persist()
-    return collection, pages
-
-
+    return collection
 # =====================================================
 # LOAD COLLECTION (KHÔNG INDEX LẠI)
 # =====================================================

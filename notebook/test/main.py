@@ -1,15 +1,15 @@
 from indexer import index_file, load_collection
 from search import search
 
-# Index lần đầu
-collection, pages = index_file("../test3.pdf")
+# Chạy 1 lần duy nhất
+collection = index_file("../test3.pdf")
 
-# Lần sau chỉ load
+# Các lần sau
 # collection = load_collection("test3.pdf")
 
 results = search(
     collection=collection,
-    query="Quy định chuyển tiếp",
-    pages=pages
+    query="Quy định chuyển tiếp"
 )
+
 print(results)

@@ -4,6 +4,12 @@ from config import ner_multi, EMAIL_REGEX, PHONE_REGEX, device
 from embedding import get_page_embedding
 from config import embed_model
 
+def get_page_text(collection, page_id):
+    res = collection.get(
+        where={"type": "page", "page": page_id},
+        include=["documents"]
+    )
+    return res["documents"][0]
 
 def extract_entities(text, max_len=1200):
     text = text[:max_len]
@@ -46,12 +52,13 @@ def find_related_pages(pid, pages, top_k=2):
     return scores[:top_k]
 
 
-def search(collection, query, pages, chunk_topk=10, page_topk=3):
+def search(collection, query, chunk_topk=10, page_topk=3):
     q_emb = embed_model.encode([query]).tolist()
 
     result = collection.query(
         query_embeddings=q_emb,
         n_results=chunk_topk,
+        where={"type": "chunk"},
         include=["metadatas"]
     )
 
@@ -61,23 +68,12 @@ def search(collection, query, pages, chunk_topk=10, page_topk=3):
     outputs = []
 
     for pid in pages_top:
-        text = pages[pid]
+        text = get_page_text(collection, pid)
         ents = extract_entities(text)
 
         outputs.append({
             "page": pid + 1,
             "highlighted_text": highlight(text, ents),
-            "related_pages": [
-                {
-                    "page": r + 1,
-                    "score": round(s, 4),
-                    "highlighted_text": highlight(
-                        pages[r],
-                        extract_entities(pages[r])
-                    )
-                }
-                for r, s in find_related_pages(pid, pages)
-            ]
         })
 
     gc.collect()
@@ -85,3 +81,4 @@ def search(collection, query, pages, chunk_topk=10, page_topk=3):
         torch.cuda.empty_cache()
 
     return outputs
+
