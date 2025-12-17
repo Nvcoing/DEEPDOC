@@ -1,21 +1,32 @@
 # main.py
-from vectordb_utils import upload_file, list_collections
+from vectordb_utils import QdrantFileUploader
 from search_utils import search
-
+import os
+vectordb = QdrantFileUploader()
 def main():
-    # ===== 1. Upload file =====
-    file_path = "../test2.docx"  # Thay bằng đường dẫn file PDF/DOCX/PPTX của bạn
-    collection_name = upload_file(file_path)
-    print(f"Uploaded file to collection: {collection_name}")
-
+    file_path = "../test2.docx"  # Thay bằng đường dẫn file của bạn
+    
+    # ===== CÁCH 1: Tự động tải theo tên file =====
+    file_name = os.path.basename(file_path)
+    collection_name = f"doc_{file_name}"
+    
+    # Thử tải collection có sẵn
+    loaded = vectordb.load_collection(collection_name)
+    
+    if loaded:
+        print(f"Đã tải collection có sẵn: {collection_name}")
+    else:
+        print(f"Collection chưa tồn tại, đang upload file mới...")
+        collection_name = vectordb.upload_file(file_path)
+    
     # ===== 2. Liệt kê collection =====
-    cols = list_collections()
+    cols = vectordb.list_collections()
     print("Current collections:", cols)
-
+    
     # ===== 3. Search =====
-    query = "Điều 10 trong file có những thông tin chi tiết là gì"  # Thay bằng câu query của bạn
+    query = "7. Quy định chuyển tiếp có thông tin chi tiết là gì"
     results = search(collection_name, query)
-
+    
     # ===== 4. Hiển thị kết quả =====
     for page_data in results:
         print("\n" + "="*50)
@@ -24,7 +35,8 @@ def main():
         print("\nRelated Pages:")
         for rel in page_data["related_pages"]:
             print(f"  - Page {rel['page']} | Score: {rel['score']}")
-            print(f"    {rel['highlighted_text']}") 
+            preview = rel['highlighted_text'][:200] + "..." if len(rel['highlighted_text']) > 200 else rel['highlighted_text']
+            print(f"    {preview}")
 
 if __name__ == "__main__":
     main()

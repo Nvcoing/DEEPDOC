@@ -2,10 +2,11 @@ import os
 import torch
 from sentence_transformers import SentenceTransformer
 from transformers import pipeline
-
-CHROMA_PATH = "./collections"
-os.makedirs(CHROMA_PATH, exist_ok=True)
-
+from qdrant_client import QdrantClient
+# Cấu hình Qdrant
+QDRANT_PATH = "./knowledge"
+os.makedirs(QDRANT_PATH, exist_ok=True)
+CLIENT = QdrantClient(path=QDRANT_PATH)
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 embed_model = SentenceTransformer(
