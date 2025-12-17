@@ -1,7 +1,7 @@
 # Core ML/NLP
-torch==2.3.1
-sentence-transformers==2.7.0
-transformers==4.41.2
+torch
+sentence-transformers
+transformers
 qdrant-client==1.15.1
 
 # File Processing
@@ -10,7 +10,7 @@ python-docx
 python-pptx
 
 # Utilities
-uuid==1.30
+uuid
 transformers
 tqdm
 numpy
