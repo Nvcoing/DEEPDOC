@@ -2,6 +2,7 @@
 export type Language = 'English' | 'Vietnamese' | 'French' | 'German' | 'Japanese' | 'Korean' | 'Chinese';
 export type Theme = 'light' | 'dark' | 'auto';
 export type ViewType = 'chat' | 'dashboard';
+export type ResearchMode = 'new' | 'library';
 
 export interface User {
   id: string;
@@ -14,13 +15,6 @@ export interface NewsArticle {
   summary: string;
   url: string;
   category: string;
-}
-
-export interface Topic {
-  id: string;
-  title: string;
-  summary: string;
-  sourceDocIds: string[];
 }
 
 export interface Document {
@@ -49,4 +43,5 @@ export interface ChatSession {
   messages: Message[];
   selectedDocIds: string[];
   lastUpdated: string;
+  mode: ResearchMode;
 }
