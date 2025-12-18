@@ -1,15 +1,10 @@
-# Core ML/NLP
 torch
 sentence-transformers
 transformers
 qdrant-client==1.15.1
-
-# File Processing
 pypdf
 python-docx
 python-pptx
-
-# Utilities
 uuid
 transformers
 tqdm
