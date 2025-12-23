@@ -10,3 +10,6 @@ transformers
 tqdm
 numpy
 pandas
+phonenumbers
+email_validator 
+dateparser

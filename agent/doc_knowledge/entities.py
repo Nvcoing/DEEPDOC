@@ -1,79 +1,101 @@
+import re
+from dateparser.search import search_dates
 import phonenumbers
 from email_validator import validate_email, EmailNotValidError
 from config import ner_multi
 
 
 # =========================
-# EXTRACT ENTITIES (NO REGEX)
+# DATE (MULTI-LANG)
 # =========================
-def extract_entities(text, max_len=1200, phone_region="VN"):
-    text = text[:max_len]
-    entities = []
+def extract_dates(text, languages=None):
+    dates = set()
 
-    # -------- EMAIL --------
-    for token in text.replace(",", " ").split():
+    found = search_dates(
+        text,
+        languages=languages,   # None = auto detect
+        settings={
+            "PREFER_DAY_OF_MONTH": "first",
+            "RETURN_AS_TIMEZONE_AWARE": False
+        }
+    )
+
+    if not found:
+        return dates
+
+    for raw, _ in found:
+        dates.add(raw)
+
+    return dates
+
+
+# =========================
+# EMAIL (LANG-AGNOSTIC)
+# =========================
+def extract_emails(text):
+    emails = set()
+
+    tokens = re.split(r"[^\w@.+-]+", text)
+    for t in tokens:
         try:
-            v = validate_email(token, check_deliverability=False)
-            start = text.find(token)
-            if start != -1:
-                entities.append({
-                    "type": "email",
-                    "value": v.email,
-                    "start": start,
-                    "end": start + len(token)
-                })
+            v = validate_email(t, check_deliverability=False)
+            emails.add(v.email)
         except EmailNotValidError:
             pass
 
-    # -------- PHONE --------
-    for match in phonenumbers.PhoneNumberMatcher(text, phone_region):
-        entities.append({
-            "type": "phone",
-            "value": match.raw_string,
-            "start": match.start,
-            "end": match.end
-        })
+    return emails
 
-    # -------- OTHER NER (KHÔNG highlight) --------
+
+# =========================
+# PHONE (INTERNATIONAL)
+# =========================
+def extract_phones(text):
+    phones = set()
+
+    # Try global detection first
+    for match in phonenumbers.PhoneNumberMatcher(text, None):
+        phones.add(match.raw_string)
+
+    return phones
+
+
+# =========================
+# ENTITY EXTRACTOR (MAIN)
+# =========================
+def extract_entities(
+    text: str,
+    max_len: int = 1200,
+    languages=None
+):
+    text = text[:max_len]
+    ents = set()
+
+    # -------- NER (MULTI-LANG) --------
     for e in ner_multi(text):
-        if e.get("word", "").strip():
-            entities.append({
-                "type": "ner",
-                "value": e["word"]
-            })
+        w = e.get("word", "").strip()
+        if w:
+            ents.add(w)
 
-    return entities
+    # -------- DATE / EMAIL / PHONE --------
+    ents |= extract_dates(text, languages)
+    ents |= extract_emails(text)
+    ents |= extract_phones(text)
+
+    return sorted(ents, key=len, reverse=True)
 
 
 # =========================
 # MARKDOWN HIGHLIGHT
 # =========================
 def highlight_markdown(text, entities):
-    """
-    In đậm EMAIL + PHONE
-    Không double **
-    Không lệch offset
-    """
-
-    spans = [
-        e for e in entities
-        if e["type"] in ("email", "phone")
-    ]
-
-    # thay từ phải sang trái
-    spans = sorted(spans, key=lambda x: x["start"], reverse=True)
-
-    for e in spans:
-        s, e_end = e["start"], e["end"]
-
-        # tránh bold trùng
-        if text[max(0, s-2):s] == "**" and text[e_end:e_end+2] == "**":
+    for e in entities:
+        if not e.strip():
             continue
 
-        text = (
-            text[:s]
-            + "**" + text[s:e_end] + "**"
-            + text[e_end:]
+        text = re.sub(
+            rf"(?<!\*)({re.escape(e)})(?!\*)",
+            r"**\1**",
+            text
         )
 
     return text
