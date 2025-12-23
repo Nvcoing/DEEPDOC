@@ -1,25 +1,79 @@
-import re
-from config import ner_multi, email_regex, phone_regex
+import phonenumbers
+from email_validator import validate_email, EmailNotValidError
+from config import ner_multi
 
-def extract_entities(text, max_len=1200):
+
+# =========================
+# EXTRACT ENTITIES (NO REGEX)
+# =========================
+def extract_entities(text, max_len=1200, phone_region="VN"):
     text = text[:max_len]
-    ents = set()
+    entities = []
 
+    # -------- EMAIL --------
+    for token in text.replace(",", " ").split():
+        try:
+            v = validate_email(token, check_deliverability=False)
+            start = text.find(token)
+            if start != -1:
+                entities.append({
+                    "type": "email",
+                    "value": v.email,
+                    "start": start,
+                    "end": start + len(token)
+                })
+        except EmailNotValidError:
+            pass
+
+    # -------- PHONE --------
+    for match in phonenumbers.PhoneNumberMatcher(text, phone_region):
+        entities.append({
+            "type": "phone",
+            "value": match.raw_string,
+            "start": match.start,
+            "end": match.end
+        })
+
+    # -------- OTHER NER (KHÔNG highlight) --------
     for e in ner_multi(text):
-        ents.add(e["word"])
+        if e.get("word", "").strip():
+            entities.append({
+                "type": "ner",
+                "value": e["word"]
+            })
 
-    ents.update(re.findall(email_regex, text))
-    ents.update(re.findall(phone_regex, text))
+    return entities
 
-    return sorted(ents, key=len, reverse=True)
 
+# =========================
+# MARKDOWN HIGHLIGHT
+# =========================
 def highlight_markdown(text, entities):
-    for e in entities:
-        if not e.strip():
+    """
+    In đậm EMAIL + PHONE
+    Không double **
+    Không lệch offset
+    """
+
+    spans = [
+        e for e in entities
+        if e["type"] in ("email", "phone")
+    ]
+
+    # thay từ phải sang trái
+    spans = sorted(spans, key=lambda x: x["start"], reverse=True)
+
+    for e in spans:
+        s, e_end = e["start"], e["end"]
+
+        # tránh bold trùng
+        if text[max(0, s-2):s] == "**" and text[e_end:e_end+2] == "**":
             continue
-        text = re.sub(
-            rf"(?<!\*)({re.escape(e)})(?!\*)",
-            r"**\1**",
-            text
+
+        text = (
+            text[:s]
+            + "**" + text[s:e_end] + "**"
+            + text[e_end:]
         )
+
     return text
