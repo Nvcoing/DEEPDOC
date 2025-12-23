@@ -13,10 +13,14 @@ embed_model = SentenceTransformer(
     "Qwen/Qwen3-Embedding-0.6B",
     device=device
 )
+
 rank_model = CrossEncoder(
     "Qwen/Qwen3-Reranker-0.6B",
     device=device
 )
+
+rank_model.tokenizer.pad_token = rank_model.tokenizer.eos_token
+rank_model.model.config.pad_token_id = rank_model.tokenizer.eos_token_id
 
 ner_multi = pipeline(
     "ner",

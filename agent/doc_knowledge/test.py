@@ -6,7 +6,7 @@ from search_utils import DOCSearcher
 vectordb = QdrantFileUploader()
 
 def main():
-    file_path = "../test2.docx"  # Đường dẫn file test
+    file_path = "../test3.pdf"  # Đường dẫn file test
 
     # ===== 1. TẠO COLLECTION NAME =====
     file_name = os.path.basename(file_path)
