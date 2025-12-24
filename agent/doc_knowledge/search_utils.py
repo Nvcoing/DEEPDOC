@@ -1,5 +1,4 @@
 import torch, gc
-from collections import defaultdict
 from qdrant_client.models import Filter, FieldCondition, MatchValue
 from entities import extract_entities, highlight_markdown
 from config import embed_model, rank_model, device, CLIENT
@@ -12,7 +11,6 @@ class DOCSearcher:
         self.page_topk = page_topk
         self.related_topk = related_topk
 
-    # ---------- COMMON UTILS ----------
     def _scroll_page(self, pid):
         res = CLIENT.scroll(
             collection_name=self.collection,
@@ -32,12 +30,10 @@ class DOCSearcher:
         ranked = sorted(zip(items.keys(), scores), key=lambda x: x[1], reverse=True)
         return ranked[:topk]
 
-    # ---------- MAIN SEARCH ----------
     def search(self, query: str):
         with torch.no_grad():
             q_emb = embed_model.encode([query]).tolist()[0]
 
-        # 1. SEARCH CHUNK
         chunks = CLIENT.search(
             collection_name=self.collection,
             query_vector=q_emb,
@@ -48,20 +44,17 @@ class DOCSearcher:
             with_payload=True
         )
 
-        # 2. GROUP → PAGE
         page_ids = {p.payload["page"] for p in chunks if p.payload.get("text")}
         page_texts = {pid: self._scroll_page(pid) for pid in page_ids}
 
-        # 3. RERANK PAGE
         ranked_pages = self._rerank(query, page_texts, self.page_topk)
 
         outputs = []
 
-        for pid, page_score in ranked_pages:
+        for rank, (pid, page_score) in enumerate(ranked_pages, start=1):
             text = page_texts[pid]
             highlight = highlight_markdown(text, extract_entities(text))
 
-            # 4. RELATED PAGE (RECALL)
             candidates = CLIENT.search(
                 collection_name=self.collection,
                 query_vector=q_emb,
@@ -81,11 +74,13 @@ class DOCSearcher:
             ranked_related = self._rerank(query, related, self.related_topk)
 
             outputs.append({
+                "rank": rank,
                 "page": pid + 1,
                 "score": round(float(page_score), 4),
                 "highlighted_text": highlight,
                 "related_pages": [
                     {
+                        "rank": r_rank,
                         "page": r_pid + 1,
                         "score": round(float(r_score), 4),
                         "highlighted_text": highlight_markdown(
@@ -93,7 +88,8 @@ class DOCSearcher:
                             extract_entities(related[r_pid])
                         )
                     }
-                    for r_pid, r_score in ranked_related
+                    for r_rank, (r_pid, r_score)
+                    in enumerate(ranked_related, start=1)
                 ]
             })
 

@@ -24,7 +24,7 @@ rank_model.model.config.pad_token_id = rank_model.tokenizer.eos_token_id
 
 ner_multi = pipeline(
     "ner",
-    model="Babelscape/wikineural-multilingual-ner",
+    model="Davlan/xlm-roberta-base-ner-hrl",
     grouped_entities=True,
     device=0 if device == "cuda" else -1
 )
