@@ -2,7 +2,7 @@ import re
 from dateparser.search import search_dates
 import phonenumbers
 from email_validator import validate_email, EmailNotValidError
-from config import ner_multi
+from doc_knowledge.config import ner_multi
 
 
 # =========================

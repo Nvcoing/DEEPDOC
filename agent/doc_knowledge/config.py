@@ -3,6 +3,11 @@ import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from transformers import pipeline
 from qdrant_client import QdrantClient
+from doc_knowledge.vectordb_utils import QdrantFileUploader
+
+VECTORDB = QdrantFileUploader()
+
+COLLECTIONS = "./collections/"
 # Cấu hình Qdrant
 QDRANT_PATH = "./knowledge"
 os.makedirs(QDRANT_PATH, exist_ok=True)
@@ -28,6 +33,3 @@ ner_multi = pipeline(
     grouped_entities=True,
     device=0 if device == "cuda" else -1
 )
-
-email_regex = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
-phone_regex = r"\+?\d[\d\- ]{7,}\d"

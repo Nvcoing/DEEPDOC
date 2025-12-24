@@ -1,7 +1,7 @@
 import torch, gc
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-from entities import extract_entities, highlight_markdown
-from config import embed_model, rank_model, device, CLIENT
+from doc_knowledge.entities import extract_entities, highlight_markdown
+from doc_knowledge.config import embed_model, rank_model, device, CLIENT
 
 
 class DOCSearcher:

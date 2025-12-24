@@ -4,8 +4,8 @@ import torch
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
-from config import CLIENT, embed_model
-from file_loader import load_file_pages, chunk_page
+from doc_knowledge.config import CLIENT, embed_model
+from doc_knowledge.file_loader import load_file_pages, chunk_page
 
 
 class QdrantFileUploader:

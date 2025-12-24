@@ -1,10 +1,14 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+import os
+import shutil
+from typing import List
 
 from llm.generate import generate
 from llm.config import GenerationConfig
+from handler.prompt import summarize
 
 app = FastAPI(
     title="Document QA Agent",
@@ -19,17 +23,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+UPLOAD_DIR = "Collections"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
 class GenerateRequest(BaseModel):
     prompt: str
+    file_name: str
 
 @app.post("/generate")
 def generate_stream(req: GenerateRequest):
     gen_cfg = GenerationConfig()
     def stream_markdown():
-        for chunk in generate(req.prompt, gen_cfg, stream=True):
+        for chunk in generate(summarize(req.prompt, req.filename), gen_cfg, stream=True):
             # SSE chuẩn
             yield chunk
     return StreamingResponse(
         stream_markdown(),
         media_type="text/event-stream"
     )
+@app.post("/files")
+async def upload_file(file: UploadFile = File(...)):
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {
+        "message": "Uploaded successfully",
+        "filename": file.filename
+    }
