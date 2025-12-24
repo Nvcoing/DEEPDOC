@@ -1,6 +1,3 @@
-import os
-from doc_knowledge.search_utils import DOCSearcher
-from doc_knowledge.result_accessor import SearchResultAccessor   # 👈 THÊM
 from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
 

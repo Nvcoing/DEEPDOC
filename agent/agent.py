@@ -34,7 +34,7 @@ class GenerateRequest(BaseModel):
 def generate_stream(req: GenerateRequest):
     gen_cfg = GenerationConfig()
     def stream_markdown():
-        for chunk in generate(summarize(req.prompt, req.filename), gen_cfg, stream=True):
+        for chunk in generate(summarize(req.prompt, req.file_name), gen_cfg, stream=True):
             # SSE chuẩn
             yield chunk
     return StreamingResponse(

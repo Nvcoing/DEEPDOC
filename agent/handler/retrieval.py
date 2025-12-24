@@ -2,7 +2,7 @@
 import os
 from doc_knowledge.search_utils import DOCSearcher
 from doc_knowledge.result_accessor import SearchResultAccessor
-from doc_knowledge.config import VECTORDB
+from doc_knowledge.vectordb_utils import QdrantFileUploader
 
 def query_document(
     file_path: str,
@@ -23,9 +23,9 @@ def query_document(
     collection_name = f"doc_{file_name}"
 
     # 2. Load hoặc upload
-    loaded = VECTORDB.load_collection(collection_name)
+    loaded = QdrantFileUploader().load_collection(collection_name)
     if not loaded:
-        collection_name = VECTORDB.upload_file(file_path)
+        collection_name = QdrantFileUploader().upload_file(file_path)
 
     # 3. Search
     searcher = DOCSearcher(

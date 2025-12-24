@@ -3,9 +3,6 @@ import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from transformers import pipeline
 from qdrant_client import QdrantClient
-from doc_knowledge.vectordb_utils import QdrantFileUploader
-
-VECTORDB = QdrantFileUploader()
 
 COLLECTIONS = "./collections/"
 # Cấu hình Qdrant
@@ -29,7 +26,7 @@ rank_model.model.config.pad_token_id = rank_model.tokenizer.eos_token_id
 
 ner_multi = pipeline(
     "ner",
-    model="Davlan/xlm-roberta-base-ner-hrl",
+    model="Babelscape/wikineural-multilingual-ner",
     grouped_entities=True,
     device=0 if device == "cuda" else -1
 )
