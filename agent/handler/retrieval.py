@@ -36,6 +36,7 @@ def query_document(
     )
 
     results = searcher.search(query)
+    print(results)
 
     # 4. Wrap accessor
     return SearchResultAccessor(results)

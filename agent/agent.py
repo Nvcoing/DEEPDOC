@@ -33,12 +33,8 @@ class GenerateRequest(BaseModel):
 @app.post("/generate")
 def generate_stream(req: GenerateRequest):
     gen_cfg = GenerationConfig()
-    def stream_markdown():
-        for chunk in generate(summarize(req.prompt, req.file_name), gen_cfg, stream=True):
-            # SSE chuẩn
-            yield chunk
     return StreamingResponse(
-        stream_markdown(),
+        generate(summarize(req.prompt, req.file_name), gen_cfg, stream=True),
         media_type="text/event-stream"
     )
 @app.post("/files")
