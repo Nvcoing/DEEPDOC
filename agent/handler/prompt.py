@@ -4,65 +4,75 @@ from typing import List
 
 def answer(query: str, file_names: List[str]) -> str:
     file_paths = [COLLECTIONS + name for name in file_names]
+
     acc = query_document(
-    file_paths=file_paths,
-    query=query,
-    chunk_topk=10,
-    page_topk=3,
-    related_topk=2
-)
-    return f"""
+        file_paths=file_paths,
+        query=query,
+        chunk_topk=10,
+        page_topk=3,
+        related_topk=2
+    )
+
+    page_summaries = run_parallel_pages(query, acc)
+
+    final_prompt = f"""
         You are an expert summarizer and information extractor.
 
-        TASK:
-        Summarize information to answer the given QUESTION, using the provided RELATED PAGES.
+        QUESTION:
+        {query}
 
-        INPUT:
-        - QUESTION: {query}
-        - MAIN RETRIEVED PAGES (3 pages):
-        - Page 1: {acc.get_page_field(1, "highlighted_text")}
-        - Page 2: {acc.get_page_field(2, "highlighted_text")}
-        - Page 3: {acc.get_page_field(3, "highlighted_text")}
+        PARTIAL SUMMARIES:
+        - Page 1 summary:
+        {page_summaries[0]}
 
-        - SUB-RELATED PAGES (2 pages for each main page):
-        - Page 1 related:
-            - Page {acc.get_related_field(1, 1, "page")}: {acc.get_related_field(1, 1, "highlighted_text")}
-            - Page {acc.get_related_field(1, 2, "page")}: {acc.get_related_field(1, 2, "highlighted_text")}
-        - Page 2 related:
-            - Page {acc.get_related_field(2, 1, "page")}: {acc.get_related_field(2, 1, "highlighted_text")}
-            - Page {acc.get_related_field(2, 2, "page")}: {acc.get_related_field(2, 2, "highlighted_text")}
-        - Page 3 related:
-            - Page {acc.get_related_field(3, 1, "page")}: {acc.get_related_field(3, 1, "highlighted_text")}
-            - Page {acc.get_related_field(3, 2, "page")}: {acc.get_related_field(3, 2, "highlighted_text")}
+        - Page 2 summary:
+        {page_summaries[1]}
+
+        - Page 3 summary:
+        {page_summaries[2]}
 
         INSTRUCTIONS:
-        1. Automatically detect the language of the input text and produce the summary in the SAME language.
-        2. Focus on answering the QUESTION directly, using evidence from ALL relevant pages.
-        3. Preserve ALL:
-        - Person names
-        - Titles / roles
-        - Numerical figures
-        - Dates, times
-        - Phone numbers
-        - Email addresses
-        - Locations / addresses
-        4. Highlight ALL important facts and entities using **bold markdown**.
-        5. Do NOT hallucinate or add information not present in the provided pages.
-        6. If information is duplicated across pages, merge it logically but keep all important details.
-        7. If pages contain conflicting information, clearly note the discrepancy and its source.
+        - Detect language automatically and respond in the SAME language
+        - Merge information logically
+        - Preserve all factual details
+        - Highlight important facts using **bold**
+        - Clearly note conflicts if any
 
-        OUTPUT FORMAT:
-        Provide a STRUCTURED SUMMARY with clear sections:
+        OUTPUT:
+        Structured final answer to the QUESTION.
+    """
+    print(final_prompt)
+    return final_prompt
 
-        - **Question Overview**
-        - **Key Entities (People / Organizations / Systems)**
-        - **Important Facts & Findings**
-        - **Numbers / Dates / Metrics**
-        - **Locations / Contacts (if any)**
-        - **Cross-page Insights & Relationships**
-        - **Final Answer to the Question**
+def summary(
+    query: str,
+    main_page_text: str,
+    related_pages: List[str]
+) -> str:
+    return f"""
+    You are an expert summarizer.
 
-        Use bullet points or short paragraphs.
-        Remain concise but DO NOT omit critical factual details.
+    TASK:
+    Summarize information relevant to the QUESTION using ONE main page and its related pages.
+
+    QUESTION:
+    {query}
+
+    MAIN PAGE:
+    {main_page_text}
+
+    RELATED PAGES:
+    - {related_pages[0]}
+    - {related_pages[1]}
+
+    INSTRUCTIONS:
+    - Automatically detect the language and respond in the SAME language
+    - Preserve all names, numbers, dates, locations, contacts
+    - Highlight important facts using **bold**
+    - Do NOT hallucinate or add new information
+
+    OUTPUT:
+    Concise factual summary focused on answering the QUESTION.
 """
+
 
