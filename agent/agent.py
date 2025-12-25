@@ -8,7 +8,7 @@ from typing import List
 
 from llm.generate import generate
 from llm.config import GenerationConfig
-from handler.prompt import summarize
+from handler.prompt import answer
 from doc_knowledge.vectordb_utils import QdrantFileUploader
 
 app = FastAPI(
@@ -28,14 +28,16 @@ UPLOAD_DIR = "Collections"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 class GenerateRequest(BaseModel):
-    prompt: str
+    question: str
     file_names: List[str]
 
 @app.post("/generate")
 def generate_stream(req: GenerateRequest):
     gen_cfg = GenerationConfig()
+    prompt = answer(req.question, req.file_names)
+    print(prompt)
     return StreamingResponse(
-        generate(summarize(req.prompt, req.file_names), gen_cfg, stream=True),
+        generate(prompt, gen_cfg, stream=True),
         media_type="text/event-stream"
     )
 @app.post("/files")

@@ -2,7 +2,7 @@ from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
 from typing import List
 
-def summarize(query: str, file_names: List[str]) -> str:
+def answer(query: str, file_names: List[str]) -> str:
     file_paths = [COLLECTIONS + name for name in file_names]
     acc = query_document(
     file_paths=file_paths,
@@ -65,3 +65,4 @@ def summarize(query: str, file_names: List[str]) -> str:
         Use bullet points or short paragraphs.
         Remain concise but DO NOT omit critical factual details.
 """
+
