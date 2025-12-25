@@ -105,10 +105,10 @@ class QdrantFileUploader:
     def load_collection(self, collection_name: str):
         try:
             self.client.get_collection(collection_name)
-            print(f"Đã tải collection: {collection_name}")
+            print(f"Load collection: {collection_name}")
             return collection_name
         except:
-            print(f"Collection '{collection_name}' không tồn tại")
+            print(f"Collection '{collection_name}' does not exist.")
             return None
 
     def check_file_uploaded(self, file_name: str):

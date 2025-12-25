@@ -9,6 +9,7 @@ from typing import List
 from llm.generate import generate
 from llm.config import GenerationConfig
 from handler.prompt import summarize
+from doc_knowledge.vectordb_utils import QdrantFileUploader
 
 app = FastAPI(
     title="Document QA Agent",
@@ -28,23 +29,33 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 class GenerateRequest(BaseModel):
     prompt: str
-    file_name: str
+    file_names: List[str]
 
 @app.post("/generate")
 def generate_stream(req: GenerateRequest):
     gen_cfg = GenerationConfig()
     return StreamingResponse(
-        generate(summarize(req.prompt, req.file_name), gen_cfg, stream=True),
+        generate(summarize(req.prompt, req.file_names), gen_cfg, stream=True),
         media_type="text/event-stream"
     )
 @app.post("/files")
-async def upload_file(file: UploadFile = File(...)):
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+async def upload_files(files: List[UploadFile] = File(...)):
+    uploaded_files = []
+    collections = []
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    for file in files:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+
+        collection_name = QdrantFileUploader().upload_file(file_path)
+
+        uploaded_files.append(file.filename)
+        collections.append(collection_name)
 
     return {
         "message": "Uploaded successfully",
-        "filename": file.filename
+        "files": uploaded_files,
+        "collections": collections
     }

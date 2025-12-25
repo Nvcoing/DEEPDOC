@@ -1,35 +1,34 @@
-# doc_service.py
 import os
+from typing import List
 from doc_knowledge.search_utils import DOCSearcher
 from doc_knowledge.result_accessor import SearchResultAccessor
 from doc_knowledge.vectordb_utils import QdrantFileUploader
 
+
 def query_document(
-    file_path: str,
+    file_paths: List[str],
     query: str,
     chunk_topk: int = 10,
     page_topk: int = 3,
     related_topk: int = 2
 ) -> SearchResultAccessor:
-    """
-    One-shot Document QA function:
-    - Load or upload document to Qdrant
-    - Search by query
-    - Return SearchResultAccessor for rank-based access
-    """
 
-    # 1. Tạo collection name
-    file_name = os.path.basename(file_path)
-    collection_name = f"doc_{file_name}"
+    collections = []
 
-    # 2. Load hoặc upload
-    loaded = QdrantFileUploader().load_collection(collection_name)
-    if not loaded:
-        collection_name = QdrantFileUploader().upload_file(file_path)
+    # ===== 1. Load hoặc upload tất cả file =====
+    for file_path in file_paths:
+        file_name = os.path.basename(file_path)
+        collection_name = f"doc_{file_name}"
 
-    # 3. Search
+        loaded = QdrantFileUploader().load_collection(collection_name)
+        if not loaded:
+            collection_name = QdrantFileUploader().upload_file(file_path)
+
+        collections.append(collection_name)
+
+    # ===== 2. Search multi-collection =====
     searcher = DOCSearcher(
-        collection=collection_name,
+        collections=collections,
         chunk_topk=chunk_topk,
         page_topk=page_topk,
         related_topk=related_topk
@@ -38,5 +37,5 @@ def query_document(
     results = searcher.search(query)
     print(results)
 
-    # 4. Wrap accessor
+    # ===== 3. Wrap accessor =====
     return SearchResultAccessor(results)

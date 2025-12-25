@@ -1,9 +1,11 @@
 from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
+from typing import List
 
-def summarize(query: str, file_name: str) -> str:
+def summarize(query: str, file_names: List[str]) -> str:
+    file_paths = [COLLECTIONS + name for name in file_names]
     acc = query_document(
-    file_path=COLLECTIONS + file_name,
+    file_paths=file_paths,
     query=query,
     chunk_topk=10,
     page_topk=3,
