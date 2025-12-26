@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { User, Document, ChatSession, Message, Language, Theme, ViewType, ResearchMode, NewsArticle } from './types';
 import { TRANSLATIONS } from './constants';
-import { generateDocumentAnswer, fetchTrendingNews } from './geminiService';
+import { fetchTrendingNews, uploadFilesToBackend, generateAnswerFromBackend } from './apiService';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
 import ChatView from './components/ChatView';
@@ -56,31 +56,54 @@ const App: React.FC = () => {
     try {
       const news = await fetchTrendingNews(language);
       setTrendingNews(news);
+    } catch (e) {
+      console.error(e);
     } finally {
       setIsNewsLoading(false);
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, forCurrentSession = false) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, forCurrentSession = false) => {
     const files = e.target.files;
-    if (!files) return;
-    Array.from(files).forEach((file: File) => {
-      const reader = new FileReader();
-      const type = file.name.split('.').pop()?.toLowerCase() as any;
-      const docId = `d-${Date.now()}-${Math.random()}`;
-      reader.onload = (ev) => {
-        const newDoc: Document = {
-          id: docId, userId: user?.id || '', name: file.name, type: type || 'txt', uploadDate: new Date().toLocaleDateString(),
-          size: file.size, fileData: ev.target?.result as string, content: `Content of ${file.name}`, summary: "Tài liệu được nạp."
+    if (!files || files.length === 0) return;
+
+    try {
+      setIsLoading(true);
+      const result = await uploadFilesToBackend(Array.from(files));
+      console.log("Backend upload success:", result);
+
+      Array.from(files).forEach((file: File) => {
+        const reader = new FileReader();
+        const type = file.name.split('.').pop()?.toLowerCase() as any;
+        const docId = `d-${Date.now()}-${Math.random()}`;
+        
+        reader.onload = (ev) => {
+          const newDoc: Document = {
+            id: docId, 
+            userId: user?.id || '', 
+            name: file.name, 
+            type: type || 'txt', 
+            uploadDate: new Date().toLocaleDateString(),
+            size: file.size, 
+            fileData: ev.target?.result as string, 
+            content: `Uploaded to backend: ${file.name}`, 
+            summary: "Tài liệu đã được phân tích bởi server."
+          };
+          
+          setDocuments(prev => [...prev, newDoc]);
+          if (forCurrentSession) {
+            setSelectedDocIds(prev => [...prev, docId]);
+            setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, selectedDocIds: [...s.selectedDocIds, docId] } : s));
+          }
         };
-        setDocuments(prev => [...prev, newDoc]);
-        if (forCurrentSession) {
-          setSelectedDocIds(prev => [...prev, docId]);
-          setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, selectedDocIds: [...s.selectedDocIds, docId] } : s));
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+        reader.readAsDataURL(file);
+      });
+    } catch (err) {
+      console.error("Upload Error:", err);
+      alert("Lỗi khi upload file lên server.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const createNewSession = (title: string, selectedIds: string[] = []) => {
@@ -99,16 +122,52 @@ const App: React.FC = () => {
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputValue.trim() || isLoading || !activeSession) return;
-    const msg: Message = { id: Date.now().toString(), role: 'user', content: inputValue, timestamp: new Date().toISOString() };
-    setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, msg], lastUpdated: new Date().toISOString() } : s));
+
+    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: inputValue, timestamp: new Date().toISOString() };
     const currentInput = inputValue;
     setInputValue('');
+    
+    const aiMsgId = (Date.now() + 1).toString();
+    const initialAiMsg: Message = { id: aiMsgId, role: 'assistant', content: "", timestamp: new Date().toISOString() };
+
+    setChatSessions(prev => prev.map(s => 
+      s.id === activeSessionId 
+        ? { ...s, messages: [...s.messages, userMsg, initialAiMsg], lastUpdated: new Date().toISOString() } 
+        : s
+    ));
+
     setIsLoading(true);
+
     try {
-      const ctxDocs = researchMode === 'new' ? documents.filter(d => selectedDocIds.includes(d.id)) : documents;
-      const res = await generateDocumentAnswer(currentInput, ctxDocs, activeSession.messages, language);
-      const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: res || "...", timestamp: new Date().toISOString() };
-      setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, aiMsg] } : s));
+      const targetDocIds = researchMode === 'new' ? selectedDocIds : documents.map(d => d.id);
+      const fileNames = documents
+        .filter(d => targetDocIds.includes(d.id))
+        .map(d => d.name);
+
+      const stream = generateAnswerFromBackend(currentInput, fileNames, language);
+      let fullText = "";
+
+      for await (const chunk of stream) {
+        fullText += chunk;
+        setChatSessions(prev => prev.map(s => 
+          s.id === activeSessionId 
+            ? { 
+                ...s, 
+                messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: fullText } : m) 
+              } 
+            : s
+        ));
+      }
+    } catch (error) {
+      console.error("Backend Error:", error);
+      setChatSessions(prev => prev.map(s => 
+        s.id === activeSessionId 
+          ? { 
+              ...s, 
+              messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: "Lỗi kết nối tới server. Vui lòng kiểm tra backend đang chạy tại localhost:8000." } : m) 
+            } 
+          : s
+      ));
     } finally {
       setIsLoading(false);
     }
@@ -121,16 +180,48 @@ const App: React.FC = () => {
         {view === 'dashboard' ? (
           <div className="h-full overflow-y-auto scrollbar-hide">
             <Dashboard t={t} chatSessions={chatSessions} trendingNews={trendingNews} documents={documents} isNewsLoading={isNewsLoading}
-              onCreateSession={() => createNewSession(t.startNew)} onOpenSession={(id) => { const s = chatSessions.find(x => x.id === id); if(s) { setActiveSessionId(id); setView('chat'); setResearchMode(s.mode); setSelectedDocIds(s.selectedDocIds); } }}
-              onNewsAction={(n) => createNewSession(n.title)} onFileAction={(d) => createNewSession(`${t.research}: ${d.name}`, [d.id])}
-              onFileUpload={(e) => handleFileUpload(e, false)} onPreview={setPreviewDoc} />
+              onCreateSession={() => createNewSession(t.startNew)} 
+              onOpenSession={(id) => { 
+                const s = chatSessions.find(x => x.id === id); 
+                if(s) { 
+                  setActiveSessionId(id); 
+                  setView('chat'); 
+                  setResearchMode(s.mode); 
+                  setSelectedDocIds(s.selectedDocIds); 
+                } 
+              }}
+              onNewsAction={(n) => createNewSession(n.title)} 
+              onFileAction={(d) => createNewSession(`${t.research}: ${d.name}`, [d.id])}
+              onFileUpload={(e) => handleFileUpload(e, false)} 
+              onPreview={setPreviewDoc} />
           </div>
         ) : activeSession && (
           <div className="h-full flex flex-row relative">
-            {researchMode === 'new' && <SidebarFocused t={t} selectedDocIds={selectedDocIds} documents={documents} onUpload={() => fileInputRef.current?.click()} onRemove={(id) => setSelectedDocIds(prev => prev.filter(x => x !== id))} />}
-            <ChatView t={t} activeSession={activeSession} researchMode={researchMode} setResearchMode={(m) => { setResearchMode(m); setChatSessions(prev => prev.map(s => s.id === activeSessionId ? {...s, mode: m} : s)); }} 
-              onBack={() => setView('dashboard')} onFileUpload={(e) => handleFileUpload(e, researchMode === 'new')} onSendMessage={handleSendMessage}
-              inputValue={inputValue} setInputValue={setInputValue} isLoading={isLoading} fileInputRef={fileInputRef} />
+            {researchMode === 'new' && (
+              <SidebarFocused 
+                t={t} 
+                selectedDocIds={selectedDocIds} 
+                documents={documents} 
+                onUpload={() => fileInputRef.current?.click()} 
+                onRemove={(id) => setSelectedDocIds(prev => prev.filter(x => x !== id))} 
+              />
+            )}
+            <ChatView 
+              t={t} 
+              activeSession={activeSession} 
+              researchMode={researchMode} 
+              setResearchMode={(m) => { 
+                setResearchMode(m); 
+                setChatSessions(prev => prev.map(s => s.id === activeSessionId ? {...s, mode: m} : s)); 
+              }} 
+              onBack={() => setView('dashboard')} 
+              onFileUpload={(e) => handleFileUpload(e, researchMode === 'new')} 
+              onSendMessage={handleSendMessage}
+              inputValue={inputValue} 
+              setInputValue={setInputValue} 
+              isLoading={isLoading} 
+              fileInputRef={fileInputRef} 
+            />
           </div>
         )}
         {previewDoc && <PreviewModal t={t} doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
