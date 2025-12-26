@@ -6,7 +6,7 @@ import os
 import shutil
 from typing import List
 
-from llm.generate import generate
+from llm.generate import generate_stream
 from llm.config import GenerationConfig
 from handler.prompt import answer
 from doc_knowledge.vectordb_utils import QdrantFileUploader
@@ -32,12 +32,12 @@ class GenerateRequest(BaseModel):
     file_names: List[str]
 
 @app.post("/generate")
-def generate_stream(req: GenerateRequest):
+def generate(req: GenerateRequest):
     gen_cfg = GenerationConfig()
     prompt = answer(req.question, req.file_names)
     print(prompt)
     return StreamingResponse(
-        generate(prompt, gen_cfg, stream=True),
+        generate_stream(prompt),
         media_type="text/event-stream"
     )
 @app.post("/files")

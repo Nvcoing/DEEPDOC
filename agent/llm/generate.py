@@ -31,15 +31,41 @@ model = AutoModelForCausalLM.from_pretrained(
 model.config.use_cache = _model_cfg.use_cache
 model.to(_model_cfg.device_map)
 model.eval()
-
-
 # =========================
-# GENERATE FUNCTION
+# NORMAL GENERATION (NO STREAM)
 # =========================
-def generate(
+def generate_text(
     prompt: str,
-    gen_config: GenerationConfig = GenerationConfig(),
-    stream: bool = False
+    gen_config: GenerationConfig = GenerationConfig()
+) -> str:
+    inputs = tokenizer(prompt, return_tensors="pt").to(_model_cfg.device_map)
+
+    gen_kwargs = dict(
+        **inputs,
+        max_new_tokens=gen_config.max_new_tokens,
+        temperature=gen_config.temperature,
+        top_p=gen_config.top_p,
+        top_k=gen_config.top_k,
+        do_sample=gen_config.do_sample,
+        repetition_penalty=gen_config.repetition_penalty,
+        num_beams=gen_config.num_beams,
+        pad_token_id=tokenizer.eos_token_id,
+        eos_token_id=gen_config.stop_token_id or tokenizer.eos_token_id,
+        use_cache=True
+    )
+
+    with torch.no_grad():
+        outputs = model.generate(**gen_kwargs)
+
+    text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+    return text[len(prompt):].strip()
+
+# =========================
+# STREAM GENERATION
+# =========================
+def generate_stream(
+    prompt: str,
+    gen_config: GenerationConfig = GenerationConfig()
 ):
     inputs = tokenizer(prompt, return_tensors="pt").to(_model_cfg.device_map)
 
@@ -57,32 +83,17 @@ def generate(
         use_cache=True
     )
 
-    # ===== STREAM MODE =====
-    if stream:
-        streamer = TextIteratorStreamer(
-            tokenizer,
-            skip_prompt=True,
-            skip_special_tokens=True
-        )
-        gen_kwargs["streamer"] = streamer
+    streamer = TextIteratorStreamer(
+        tokenizer,
+        skip_prompt=True,
+        skip_special_tokens=True
+    )
+    gen_kwargs["streamer"] = streamer
 
-        thread = threading.Thread(
-            target=model.generate,
-            kwargs=gen_kwargs
-        )
-        thread.start()
+    def _run():
+        model.generate(**gen_kwargs)
 
-        for chunk in streamer:
-            yield chunk
+    threading.Thread(target=_run, daemon=True).start()
 
-    # ===== NORMAL MODE =====
-    else:
-        with torch.no_grad():
-            outputs = model.generate(**gen_kwargs)
-
-        output_text = tokenizer.decode(
-            outputs[0],
-            skip_special_tokens=True
-        )
-
-        return output_text[len(prompt):].strip()
+    for token in streamer:
+        yield token
