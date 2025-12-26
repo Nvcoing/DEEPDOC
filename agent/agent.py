@@ -7,8 +7,7 @@ import shutil
 from typing import List
 
 from llm.generate import generate_stream
-from llm.config import GenerationConfig
-from handler.prompt import answer
+from handler.response import answer
 from doc_knowledge.vectordb_utils import QdrantFileUploader
 
 app = FastAPI(
@@ -33,7 +32,6 @@ class GenerateRequest(BaseModel):
 
 @app.post("/generate")
 def generate(req: GenerateRequest):
-    gen_cfg = GenerationConfig()
     prompt = answer(req.question, req.file_names)
     print(prompt)
     return StreamingResponse(
