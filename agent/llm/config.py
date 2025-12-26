@@ -7,7 +7,7 @@ import torch
 # =========================
 @dataclass
 class ModelConfig:
-    model_name: str = "meta-llama/Llama-3.2-1B-Instruct"
+    model_name: str = "meta-llama/Llama-3.2-3B-Instruct"
     device_map: str = "cuda"
     torch_dtype: torch.dtype = torch.float16
     trust_remote_code: bool = False

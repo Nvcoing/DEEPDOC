@@ -36,7 +36,7 @@ def generate(req: GenerateRequest):
     print(prompt)
     return StreamingResponse(
         generate_stream(prompt),
-        media_type="text/event-stream"
+        media_type="text/plain"
     )
 @app.post("/files")
 async def upload_files(files: List[UploadFile] = File(...)):
