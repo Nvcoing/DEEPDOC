@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 import os
 import shutil
@@ -58,4 +58,35 @@ async def upload_files(files: List[UploadFile] = File(...)):
         "message": "Uploaded successfully",
         "files": uploaded_files,
         "collections": collections
+    }
+    # ================== DOWNLOAD FILE ==================
+@app.get("/files/{file_name}")
+def download_file(file_name: str):
+    file_path = os.path.join(UPLOAD_DIR, file_name)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(
+        path=file_path,
+        filename=file_name,
+        media_type="application/octet-stream"
+    )
+
+# ================== DELETE FILE ==================
+@app.delete("/files/{file_name}")
+def delete_file(file_name: str):
+    file_path = os.path.join(UPLOAD_DIR, file_name)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    os.remove(file_path)
+
+    # nếu cần xóa luôn collection trong Qdrant thì gọi thêm hàm tại đây
+    # QdrantFileUploader().delete_collection(file_name)
+
+    return {
+        "message": "Deleted successfully",
+        "file": file_name
     }
