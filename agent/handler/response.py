@@ -74,8 +74,6 @@ def answer(question: str, file_names: List[str]) -> str:
         related_topk=0
     )
 
-    pages_text = get_main_pages_text(acc)
-
     final_prompt = f"""
 You are a strict document-grounded question answering system.
 
@@ -90,29 +88,16 @@ QUESTION:
 
 DOCUMENT CONTENT:
 Page 1:
-{pages_text[0]}
+{acc.get_page_field(1, "highlighted_text")}
 
 Page 2:
-{pages_text[1]}
+{acc.get_page_field(2, "highlighted_text")}
 
 Page 3:
-{pages_text[2]}
+{acc.get_page_field(3, "highlighted_text")}
 
 OUTPUT:
 Provide a clear, concise answer grounded strictly in the document.
 """
-
-    return generate_text(final_prompt)
-
-
-def get_main_pages_text(
-    acc,
-    page_indices: List[int] = [1, 2, 3]
-) -> List[str]:
-    results = []
-
-    for page_idx in page_indices:
-        page_text = acc.get_page_field(page_idx, "highlighted_text")
-        results.append(page_text)
-
-    return results
+    print(final_prompt)
+    return final_prompt
