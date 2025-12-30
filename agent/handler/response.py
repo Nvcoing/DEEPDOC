@@ -75,15 +75,13 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a helpful assistant that answers questions based on documents and your knowledge.
+    Answer the question using the document and your knowledge.
 
-    Rules:
-    - First, look for the answer in the DOCUMENT below
-    - If document has the answer, use it and add relevant context from your knowledge
-    - If document does NOT have complete answer, use your knowledge to give a helpful response
-    - Answer in the SAME language as the question (Vietnamese → Vietnamese, English → English)
-    - Give complete, detailed answers with all relevant information
-    - Answer directly, do NOT explain your reasoning process
+    IMPORTANT: Answer in the SAME language as the question.
+    - Vietnamese question → Vietnamese answer
+    - English question → English answer
+
+    Give complete, detailed answer. Answer directly, no explanation.
 
     Document:
     {acc.get_page_field(1, "highlighted_text")}
