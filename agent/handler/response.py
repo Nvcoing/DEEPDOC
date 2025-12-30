@@ -87,17 +87,10 @@ QUESTION:
 {question}
 
 DOCUMENT CONTENT:
-Page 1:
 {acc.get_page_field(1, "highlighted_text")}
-
-Page 2:
-{acc.get_page_field(2, "highlighted_text")}
-
-Page 3:
-{acc.get_page_field(3, "highlighted_text")}
 
 OUTPUT:
 Provide a clear, concise answer grounded strictly in the document.
 """
-    print(final_prompt)
-    return final_prompt
+    print(repr(final_prompt))
+    return repr(final_prompt)
