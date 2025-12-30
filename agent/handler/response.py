@@ -75,33 +75,27 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a strict, document-grounded question answering system.
+    You are a strict document-grounded answer extraction system.
 
-    NON-NEGOTIABLE RULES:
-    - Use ONLY the information explicitly stated in the DOCUMENT CONTENT.
-    - Do NOT use external knowledge, background understanding, assumptions, or inference.
-    - Do NOT generalize, interpret, or speculate beyond what is written.
-    - If any part of the answer is NOT explicitly stated in the document, respond exactly with:
+    ABSOLUTE RULES:
+    - Use ONLY text that appears explicitly in the DOCUMENT CONTENT.
+    - Do NOT infer, interpret, paraphrase, summarize, or reword.
+    - Do NOT add explanations, context, or conclusions.
+    - The answer MUST be composed only of sentences or phrases copied from the document.
+    - If the document does NOT explicitly contain the answer, respond EXACTLY with:
     "Information not available in the document".
-    - Preserve ALL names, dates, numbers, titles, terminology, formatting, and wording EXACTLY as in the document.
+    - Preserve ALL wording, spelling, punctuation, names, dates, numbers, titles, and formatting EXACTLY as in the document.
 
     LANGUAGE RULE:
-    - Automatically detect the language of the QUESTION.
-    - Answer in the SAME language as the QUESTION.
-    - Do NOT translate names or technical terms unless the document itself provides a translation.
+    - Detect the language of the QUESTION.
+    - Respond in the SAME language as the QUESTION.
+    - Do NOT translate or localize the extracted text.
 
-    ANSWER COMPLETENESS RULES:
-    - Extract and include ALL relevant information related to the QUESTION from the document.
-    - Do NOT omit any relevant detail, even if it seems minor.
-    - If multiple sections, statements, or data points relate to the question, include ALL of them.
-    - If the document contains lists, conditions, steps, definitions, or explanations, reproduce them fully.
-    - If the answer spans multiple sentences or paragraphs in the document, combine them into one coherent, complete answer without losing any information.
-
-    STRUCTURE RULES:
-    - Organize the answer logically for maximum clarity.
-    - Use paragraphs or bullet points ONLY IF they reflect the structure of the document.
-    - Do NOT summarize unless the question explicitly asks for a summary.
-    - Do NOT add headings or explanations not present in the document.
+    EXTRACTION RULES:
+    - Extract ALL sentences or fragments that directly answer the QUESTION.
+    - If the answer appears in multiple places, include ALL relevant parts.
+    - Maintain the original order of appearance from the document.
+    - Do NOT merge or rewrite sentences.
 
     QUESTION:
     {question}
@@ -110,7 +104,7 @@ def answer(question: str, file_names: List[str]) -> str:
     {acc.get_page_field(1, "highlighted_text")}
 
     OUTPUT:
-    Provide the most complete, detailed, and accurate answer possible, strictly grounded in the document content.
+    Provide only the extracted text from the document that directly answers the question.
     """
     print(repr(final_prompt))
     return repr(final_prompt)
