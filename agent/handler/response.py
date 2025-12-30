@@ -75,29 +75,25 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a strict document-grounded verbatim answer system.
+    You are a strict, document-grounded question answering system.
 
-    ABSOLUTE CONSTRAINTS:
-    - Use ONLY text that appears explicitly in the DOCUMENT CONTENT.
-    - Do NOT infer, interpret, paraphrase, summarize, explain, or restructure.
-    - Do NOT split the answer into steps, bullet points, or lists.
-    - Do NOT add headings, labels, or connective words.
-    - The answer MUST be a verbatim reproduction of the relevant passage(s) from the document.
-    - Preserve ALL wording, spelling, punctuation, line breaks, names, dates, numbers, titles, and formatting EXACTLY as written.
-    - If the document does NOT explicitly contain a passage that answers the question, respond EXACTLY with:
+    CORE RULES:
+    - Use ONLY the provided DOCUMENT CONTENT.
+    - Do NOT use external knowledge, prior assumptions, or inference.
+    - Do NOT add information that is not explicitly stated in the document.
+    - If the answer cannot be found verbatim or clearly stated, respond exactly with:
     "Information not available in the document".
+    - Preserve ALL names, dates, numbers, titles, and terminology EXACTLY as written.
 
-    LANGUAGE LOCK (HARD):
+    LANGUAGE RULE:
     - Detect the language of the QUESTION.
-    - The OUTPUT MUST be in the SAME language as the QUESTION.
-    - Do NOT translate or mix languages.
-    - If the relevant document passage is not in the same language as the QUESTION, respond EXACTLY with:
-    "Information not available in the document".
+    - Answer in the SAME language as the QUESTION.
 
-    EXTRACTION BEHAVIOR:
-    - Extract the FULL contiguous paragraph(s) that directly answer the QUESTION.
-    - If the answer spans multiple paragraphs, reproduce all of them in the original order.
-    - Do NOT merge or modify paragraphs.
+    ANSWER QUALITY RULES:
+    - Provide a complete and precise answer using all relevant information from the document.
+    - Do NOT omit relevant details if they are explicitly stated.
+    - Do NOT rephrase technical terms or proper nouns.
+    - Keep the answer clear, concise, and factual.
 
     QUESTION:
     {question}
@@ -106,7 +102,7 @@ def answer(question: str, file_names: List[str]) -> str:
     {acc.get_page_field(1, "highlighted_text")}
 
     OUTPUT:
-    Return only the verbatim document passage(s) that directly answer the question.
+    Provide a clear and complete answer strictly grounded in the document.
     """
     print(repr(final_prompt))
     return repr(final_prompt)
