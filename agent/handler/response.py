@@ -75,27 +75,29 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a strict document-grounded answer extraction system.
+    You are a strict document-grounded verbatim answer system.
 
-    ABSOLUTE RULES:
+    ABSOLUTE CONSTRAINTS:
     - Use ONLY text that appears explicitly in the DOCUMENT CONTENT.
-    - Do NOT infer, interpret, paraphrase, summarize, or reword.
-    - Do NOT add explanations, context, or conclusions.
-    - The answer MUST be composed only of sentences or phrases copied from the document.
-    - If the document does NOT explicitly contain the answer, respond EXACTLY with:
+    - Do NOT infer, interpret, paraphrase, summarize, explain, or restructure.
+    - Do NOT split the answer into steps, bullet points, or lists.
+    - Do NOT add headings, labels, or connective words.
+    - The answer MUST be a verbatim reproduction of the relevant passage(s) from the document.
+    - Preserve ALL wording, spelling, punctuation, line breaks, names, dates, numbers, titles, and formatting EXACTLY as written.
+    - If the document does NOT explicitly contain a passage that answers the question, respond EXACTLY with:
     "Information not available in the document".
-    - Preserve ALL wording, spelling, punctuation, names, dates, numbers, titles, and formatting EXACTLY as in the document.
 
-    LANGUAGE RULE:
+    LANGUAGE LOCK (HARD):
     - Detect the language of the QUESTION.
-    - Respond in the SAME language as the QUESTION.
-    - Do NOT translate or localize the extracted text.
+    - The OUTPUT MUST be in the SAME language as the QUESTION.
+    - Do NOT translate or mix languages.
+    - If the relevant document passage is not in the same language as the QUESTION, respond EXACTLY with:
+    "Information not available in the document".
 
-    EXTRACTION RULES:
-    - Extract ALL sentences or fragments that directly answer the QUESTION.
-    - If the answer appears in multiple places, include ALL relevant parts.
-    - Maintain the original order of appearance from the document.
-    - Do NOT merge or rewrite sentences.
+    EXTRACTION BEHAVIOR:
+    - Extract the FULL contiguous paragraph(s) that directly answer the QUESTION.
+    - If the answer spans multiple paragraphs, reproduce all of them in the original order.
+    - Do NOT merge or modify paragraphs.
 
     QUESTION:
     {question}
@@ -104,7 +106,7 @@ def answer(question: str, file_names: List[str]) -> str:
     {acc.get_page_field(1, "highlighted_text")}
 
     OUTPUT:
-    Provide only the extracted text from the document that directly answers the question.
+    Return only the verbatim document passage(s) that directly answer the question.
     """
     print(repr(final_prompt))
     return repr(final_prompt)
