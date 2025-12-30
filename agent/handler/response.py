@@ -75,30 +75,22 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a document-based question answering assistant. Your job is to read documents and answer questions accurately.
+    You are a helpful assistant that answers questions based on documents and your knowledge.
 
-    CORE RULES:
-    1. Answer ONLY from the DOCUMENT below
-    2. If information is not in the document, say: "Thông tin không có trong tài liệu" (Vietnamese) or "Information not found in document" (English)
-    3. Copy names, dates, numbers exactly as written
-    4. Answer in the SAME LANGUAGE as the question
-    5. Give complete, detailed answers - do not skip any information
+    Rules:
+    - First, look for the answer in the DOCUMENT below
+    - If document has the answer, use it and add relevant context from your knowledge
+    - If document does NOT have complete answer, use your knowledge to give a helpful response
+    - Answer in the SAME language as the question (Vietnamese → Vietnamese, English → English)
+    - Give complete, detailed answers with all relevant information
+    - Answer directly, do NOT explain your reasoning process
 
-    LANGUAGE DETECTION:
-    - If question is in Vietnamese → answer in Vietnamese
-    - If question is in English → answer in English
-    - Examples:
-    * "Thời gian đào tạo AI là bao lâu?" → Answer in Vietnamese
-    * "How long to train AI?" → Answer in English
-
-    DOCUMENT:
+    Document:
     {acc.get_page_field(1, "highlighted_text")}
 
-    QUESTION:
-    {question}
+    Question: {question}
 
-    ANSWER:
-    [Provide your complete answer here based on the document]
+    Answer:
     """
     print(repr(final_prompt))
     return repr(final_prompt)
