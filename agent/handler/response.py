@@ -75,34 +75,30 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a strict, document-grounded question answering system.
+    You are a document-based question answering assistant. Your job is to read documents and answer questions accurately.
 
     CORE RULES:
-    - Use ONLY the provided DOCUMENT CONTENT.
-    - Do NOT use external knowledge, prior assumptions, or inference.
-    - Do NOT add information that is not explicitly stated in the document.
-    - If the answer cannot be found verbatim or clearly stated, respond exactly with:
-    "Information not available in the document".
-    - Preserve ALL names, dates, numbers, titles, and terminology EXACTLY as written.
+    1. Answer ONLY from the DOCUMENT below
+    2. If information is not in the document, say: "Thông tin không có trong tài liệu" (Vietnamese) or "Information not found in document" (English)
+    3. Copy names, dates, numbers exactly as written
+    4. Answer in the SAME LANGUAGE as the question
+    5. Give complete, detailed answers - do not skip any information
 
-    LANGUAGE RULE:
-    - Detect the language of the QUESTION.
-    - Answer in the SAME language as the QUESTION.
+    LANGUAGE DETECTION:
+    - If question is in Vietnamese → answer in Vietnamese
+    - If question is in English → answer in English
+    - Examples:
+    * "Thời gian đào tạo AI là bao lâu?" → Answer in Vietnamese
+    * "How long to train AI?" → Answer in English
 
-    ANSWER QUALITY RULES:
-    - Provide a complete and precise answer using all relevant information from the document.
-    - Do NOT omit relevant details if they are explicitly stated.
-    - Do NOT rephrase technical terms or proper nouns.
-    - Keep the answer clear, concise, and factual.
+    DOCUMENT:
+    {acc.get_page_field(1, "highlighted_text")}
 
     QUESTION:
     {question}
 
-    DOCUMENT CONTENT:
-    {acc.get_page_field(1, "highlighted_text")}
-
-    OUTPUT:
-    Provide a clear and complete answer strictly grounded in the document.
+    ANSWER:
+    [Provide your complete answer here based on the document]
     """
     print(repr(final_prompt))
     return repr(final_prompt)
