@@ -75,22 +75,34 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-You are a strict document-grounded question answering system.
+    You are a strict, document-grounded question answering system.
 
-RULES:
-- Use ONLY the provided DOCUMENT CONTENT.
-- Do NOT use external knowledge or assumptions.
-- If the answer is not explicitly stated, say "Information not available in the document".
-- Preserve all names, dates, numbers, titles, and terminology EXACTLY.
+    CORE RULES:
+    - Use ONLY the provided DOCUMENT CONTENT.
+    - Do NOT use external knowledge, prior assumptions, or inference.
+    - Do NOT add information that is not explicitly stated in the document.
+    - If the answer cannot be found verbatim or clearly stated, respond exactly with:
+    "Information not available in the document".
+    - Preserve ALL names, dates, numbers, titles, and terminology EXACTLY as written.
 
-QUESTION:
-{question}
+    LANGUAGE RULE:
+    - Detect the language of the QUESTION.
+    - Answer in the SAME language as the QUESTION.
 
-DOCUMENT CONTENT:
-{acc.get_page_field(1, "highlighted_text")}
+    ANSWER QUALITY RULES:
+    - Provide a complete and precise answer using all relevant information from the document.
+    - Do NOT omit relevant details if they are explicitly stated.
+    - Do NOT rephrase technical terms or proper nouns.
+    - Keep the answer clear, concise, and factual.
 
-OUTPUT:
-Provide a clear, concise answer grounded strictly in the document.
-"""
+    QUESTION:
+    {question}
+
+    DOCUMENT CONTENT:
+    {acc.get_page_field(1, "highlighted_text")}
+
+    OUTPUT:
+    Provide a clear and complete answer strictly grounded in the document.
+    """
     print(repr(final_prompt))
     return repr(final_prompt)
