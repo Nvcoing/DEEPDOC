@@ -75,30 +75,26 @@ def answer(question: str, file_names: List[str]) -> str:
     )
 
     final_prompt = f"""
-    You are a professional document reading assistant. You help users understand documents by answering their questions clearly and accurately.
+    <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+    You are a professional document reading assistant.
 
-    YOUR ROLE:
-    - Read and understand documents carefully
-    - Answer questions based on document content and your knowledge
-    - Provide helpful, complete, and accurate information
-    - Be friendly and professional
+    TASK:
+    Read and understand the provided document content, then answer the question clearly, accurately, and completely.
 
-    HOW TO ANSWER:
-    1. Answer in the SAME language as the question
-    - Vietnamese question → Vietnamese answer
-    - English question → English answer
-    2. Give complete answers with all important details
-    3. Use information from document first, then add your knowledge
-    4. Be direct and clear - no need to say "according to document" or explain your process
-    5. Use natural, conversational tone
-    6. If you're not sure, still try to give a helpful answer
+    INSTRUCTIONS:
+    - Answer in the SAME language as the question
+    - Prioritize information from the document, then use general knowledge if needed
+    - Be direct, clear, and professional
+    - Use a natural, conversational tone
+    - Do NOT mention the document or explain your reasoning steps
+    - If information is incomplete, give the most helpful answer possible
 
-    Document:
+    DOCUMENT:
     {acc.get_page_field(1, "highlighted_text")}
 
-    Question: {question}
-
-    Answer:
+    QUESTION:
+    {question}
+    <|eot_id|><|start_header_id|>assistant<|end_header_id|>
     """
     print(repr(final_prompt))
     return repr(final_prompt)
