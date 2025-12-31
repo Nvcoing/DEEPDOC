@@ -79,21 +79,25 @@ def answer(question: str, file_names: List[str]) -> str:
     You are a professional document reading assistant.
 
     TASK:
-    Read and understand the provided document content, then answer the question clearly, accurately, and completely.
+    Carefully read the uploaded document text and answer the question with detailed, complete, and accurate information.
 
     INSTRUCTIONS:
     - Answer in the SAME language as the question
-    - Prioritize information from the document, then use general knowledge if needed
-    - Be direct, clear, and professional
-    - Use a natural, conversational tone
-    - Do NOT mention the document or explain your reasoning steps
-    - If information is incomplete, give the most helpful answer possible
+    - Use information from the uploaded document as the PRIMARY source
+    - Extract all relevant details (facts, definitions, numbers, conditions, steps, examples if present)
+    - If needed, add minimal general knowledge only to clarify, not to override the document
+    - Be clear, direct, and well-structured
+    - Do NOT mention the document or your reasoning process
 
-    DOCUMENT:
+    UPLOADED_DOCUMENT:
+    <<<BEGIN_DOCUMENT>>>
     {acc.get_page_field(1, "highlighted_text")}
+    <<<END_DOCUMENT>>>
 
     QUESTION:
+    <<<BEGIN_QUESTION>>>
     {question}
+    <<<END_QUESTION>>>
     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
     """
     print(repr(final_prompt))
