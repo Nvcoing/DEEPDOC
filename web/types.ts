@@ -1,29 +1,20 @@
 
 export type Language = 'English' | 'Vietnamese' | 'French' | 'German' | 'Japanese' | 'Korean' | 'Chinese';
 export type Theme = 'light' | 'dark' | 'auto';
-export type ViewType = 'chat' | 'dashboard' | 'folders' | 'trash';
+export type ViewType = 'chat' | 'dashboard';
 export type ResearchMode = 'new' | 'library';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  department?: string;
 }
 
-export interface Folder {
-  id: string;
-  name: string;
-  parentId: string | null;
-  departmentId?: string;
-  permissions?: string[]; // ['read', 'write', 'admin']
-}
-
-export interface DocumentVersion {
-  version: number;
-  date: string;
-  author: string;
-  filePath: string;
+export interface NewsArticle {
+  title: string;
+  summary: string;
+  url: string;
+  category: string;
 }
 
 export interface Document {
@@ -35,9 +26,7 @@ export interface Document {
   size: number;
   content: string; 
   fileData?: string; 
-  folderId?: string;
-  isDeleted?: boolean;
-  versionHistory?: DocumentVersion[];
+  summary?: string;
 }
 
 export interface Message {
@@ -55,12 +44,4 @@ export interface ChatSession {
   selectedDocIds: string[];
   lastUpdated: string;
   mode: ResearchMode;
-}
-
-// Added missing NewsArticle interface
-export interface NewsArticle {
-  title: string;
-  summary: string;
-  url?: string;
-  category: string;
 }
