@@ -82,7 +82,9 @@ def delete_file(file_name: str):
         raise HTTPException(status_code=404, detail="File not found")
 
     os.remove(file_path)
-    QdrantFileUploader().delete_collection(file_name)
+
+    # nếu cần xóa luôn collection trong Qdrant thì gọi thêm hàm tại đây
+    # QdrantFileUploader().delete_collection(file_name)
 
     return {
         "message": "Deleted successfully",
