@@ -1,20 +1,35 @@
 
 export type Language = 'English' | 'Vietnamese' | 'French' | 'German' | 'Japanese' | 'Korean' | 'Chinese';
 export type Theme = 'light' | 'dark' | 'auto';
-export type ViewType = 'chat' | 'dashboard';
+export type ViewType = 'chat' | 'dashboard' | 'folders' | 'trash' | 'admin-panel' | 'history';
 export type ResearchMode = 'new' | 'library';
+export type UserRole = 'admin' | 'user';
+export type DocStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ActivityLog {
+  id: string;
+  type: 'upload' | 'folder_creation';
+  name: string;
+  timestamp: string;
+  details?: string;
+}
 
 export interface User {
   id: string;
   name: string;
   email: string;
+  role: UserRole;
+  department?: string;
+  allowedDocIds?: string[];
 }
 
-export interface NewsArticle {
-  title: string;
-  summary: string;
-  url: string;
-  category: string;
+export interface Folder {
+  id: string;
+  name: string;
+  parentId: string | null;
+  departmentId?: string;
+  status: DocStatus;
+  userId: string;
 }
 
 export interface Document {
@@ -25,8 +40,10 @@ export interface Document {
   uploadDate: string;
   size: number;
   content: string; 
-  fileData?: string; 
-  summary?: string;
+  status: DocStatus;
+  isDeleted?: boolean;
+  fileData?: string;
+  folderId?: string; // ID của thư mục chứa file
 }
 
 export interface Message {
@@ -44,4 +61,11 @@ export interface ChatSession {
   selectedDocIds: string[];
   lastUpdated: string;
   mode: ResearchMode;
+}
+
+export interface NewsArticle {
+  title: string;
+  summary: string;
+  url?: string;
+  category: string;
 }
