@@ -173,20 +173,19 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
               {departments.map(dept => (
                 <div 
                   key={dept.id} 
-                  onClick={() => setSelectedDeptId(dept.id)}
-                  className={`group cursor-pointer border-2 p-6 rounded-[2.2rem] transition-all flex flex-col gap-4 ${selectedDeptId === dept.id ? 'bg-indigo-600 border-indigo-600 text-white shadow-2xl' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-indigo-200'}`}
+                  className="group bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-6 rounded-[2.2rem] transition-all flex flex-col gap-4 hover:border-indigo-200 hover:shadow-xl"
                 >
                   <div className="flex items-center justify-between">
-                     <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${selectedDeptId === dept.id ? 'bg-white/20' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600'}`}>
+                     <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center">
                         <Building2 className="w-7 h-7" />
                      </div>
-                     <button onClick={(e) => { e.stopPropagation(); setDepartments(departments.filter(d => d.id !== dept.id)); }} className={`p-2 rounded-xl transition-colors ${selectedDeptId === dept.id ? 'hover:bg-red-500 text-white' : 'text-slate-200 hover:text-red-500'}`}>
+                     <button onClick={() => setDepartments(departments.filter(d => d.id !== dept.id))} className="p-2 text-slate-200 hover:text-red-500 transition-colors">
                         <Trash2 className="w-5 h-5" />
                      </button>
                   </div>
                   <div>
-                    <h4 className="font-black text-lg truncate leading-tight">{dept.name}</h4>
-                    <p className={`text-[10px] font-black uppercase tracking-widest mt-1 ${selectedDeptId === dept.id ? 'text-indigo-100' : 'text-slate-400'}`}>
+                    <h4 className="font-black text-lg truncate leading-tight dark:text-white uppercase italic">{dept.name}</h4>
+                    <p className="text-[10px] font-black uppercase tracking-widest mt-1 text-slate-400">
                        {users.filter(u => u.departmentId === dept.id).length} Thành viên
                     </p>
                   </div>
@@ -232,7 +231,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="relative">
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                       <input 
-                        type="text" placeholder="Mật khẩu truy cập" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm dark:text-white font-bold outline-none"
+                        type="password" placeholder="Mật khẩu truy cập" className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl text-sm dark:text-white font-bold outline-none"
                         value={newUser.password} onChange={e => setNewUser({...newUser, password: e.target.value})}
                       />
                     </div>
@@ -296,57 +295,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                        )}
                     </div>
                   </div>
-                ))}
-             </div>
-          </section>
-        )}
-
-        {/* FOLDER PERMISSIONS */}
-        {activeTab === 'folders' && (
-          <section className="space-y-8 animate-in fade-in duration-300">
-             <div className="flex items-center justify-between">
-                <h3 className="font-black text-xl flex items-center gap-3 dark:text-white">
-                   <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
-                   Liên kết Phòng ban & Thư mục
-                </h3>
-             </div>
-             
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {folders.filter(f => !f.isSystem).map(folder => (
-                   <div key={folder.id} className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-[2.5rem] space-y-8 shadow-sm flex flex-col justify-between hover:shadow-2xl transition-all group">
-                      <div className="space-y-6">
-                        <div className="flex items-center gap-5">
-                           <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                              <LayoutGrid className="w-8 h-8" />
-                           </div>
-                           <div className="min-w-0">
-                              <h4 className="font-black text-base dark:text-white truncate uppercase italic">{folder.name}</h4>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-1">ID: {folder.id.slice(-6)}</p>
-                           </div>
-                        </div>
-                        
-                        <div className="space-y-3">
-                           <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">Quyền truy cập của Phòng ban:</label>
-                           <select 
-                              className="w-full bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500 px-5 py-4 rounded-2xl text-xs dark:text-white outline-none font-bold transition-all"
-                              value={folder.departmentId || ""}
-                              onChange={e => handleMapFolderToDept(folder.id, e.target.value)}
-                           >
-                              <option value="">-- {t.noDept} --</option>
-                              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                           </select>
-                        </div>
-                      </div>
-
-                      <div className="pt-6 border-t border-slate-50 dark:border-slate-800">
-                         <div className="flex items-center gap-3">
-                            <div className={`w-3 h-3 rounded-full ${folder.departmentId ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]' : 'bg-slate-300'}`} />
-                            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate">
-                               {folder.departmentId ? `Dành riêng cho: ${departments.find(d => d.id === folder.departmentId)?.name}` : 'CHẾ ĐỘ TỰ DO / CÔNG KHAI'}
-                            </span>
-                         </div>
-                      </div>
-                   </div>
                 ))}
              </div>
           </section>

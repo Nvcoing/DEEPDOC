@@ -1,58 +1,29 @@
 
-// Use correct import for GoogleGenAI
-import { GoogleGenAI, Type } from "@google/genai";
 import { Language, NewsArticle } from "./types";
 
-// Always use named parameter for apiKey and process.env.API_KEY directly
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const BACKEND_URL = "http://localhost:8000";
 
-// Giữ nguyên phần tin tức sử dụng Gemini trực tiếp vì backend không có endpoint này
+/** 
+ * Lấy tin tức - Bây giờ chỉ dùng mock hoặc gọi API backend (không dùng Gemini SDK ở frontend)
+ */
 export async function fetchTrendingNews(language: Language = 'Vietnamese'): Promise<NewsArticle[]> {
-  const model = 'gemini-3-flash-preview';
-  const prompt = `Lấy danh sách 4 tin tức thế giới hoặc bài báo mới nhất, nổi bật nhất về công nghệ, khoa học hoặc kinh tế. Trình bày dưới dạng JSON array với các trường: title, summary (ngắn gọn 1 câu), url (nếu có), category. Phản hồi bằng ${language}.`;
-
+  // Thay thế Gemini bằng một lời gọi đến backend hoặc dữ liệu tĩnh để tránh dùng API Key ở frontend
   try {
-    // Fixed contents to string as per single-turn guideline
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              summary: { type: Type.STRING },
-              url: { type: Type.STRING },
-              category: { type: Type.STRING }
-            },
-            required: ["title", "summary", "category"]
-          }
-        }
-      },
-    });
-
-    // Fixed: response.text is a property, not a method
-    const newsText = response.text?.trim() || '[]';
-    const news = JSON.parse(newsText);
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const response = await fetch(`${BACKEND_URL}/news?lang=${language}`);
+    if (response.ok) return await response.json();
     
-    return news.map((item: any, index: number) => ({
-      ...item,
-      url: item.url || (chunks[index]?.web?.uri || '#')
-    }));
+    // Fallback dữ liệu mẫu nếu API backend chưa có
+    return [
+      { title: "Nâng cấp hệ thống tri thức v2.5", summary: "DocuMind đã chính thức loại bỏ API Key ở client để bảo mật hơn.", category: "System" },
+      { title: "Kỹ thuật RAG mới trong quản lý tài liệu", summary: "Tìm hiểu cách hệ thống truy xuất thông tin chính xác từ PDF.", category: "Tech" }
+    ];
   } catch (error) {
-    console.error("News Fetch Error:", error);
     return [];
   }
 }
 
 /** 
- * Gửi file lên backend localhost:8000/files
+ * Gửi file lên backend
  */
 export async function uploadFilesToBackend(files: File[]) {
   const formData = new FormData();
