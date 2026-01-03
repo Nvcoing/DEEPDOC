@@ -1,5 +1,5 @@
 {
-  "name": "copy-of-documind---document-centric-knowledge-agent",
+  "name": "copy-of-copy-of-copy-of-copy-of-documind---document-centric-knowledge-agent",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,9 @@
     "react-dom": "^19.2.3",
     "lucide-react": "^0.561.0",
     "mammoth": "1.6.0",
-    "@google/genai": "^1.34.0"
+    "@google/genai": "^1.34.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

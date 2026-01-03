@@ -8,7 +8,7 @@ export const TRANSLATIONS: Record<Language, any> = {
     welcome: "Welcome", login: "Login", logout: "Logout",
     approve: "Approve", reject: "Reject", status: "Status",
     pending: "Pending", approved: "Approved",
-    userMgmt: "User Access", searchPlaceholder: "Ask anything about your documents...",
+    userMgmt: "User Management", searchPlaceholder: "Ask anything about your documents...",
     brandName: "DocuMind", portalName: "Intel Portal",
     history: "History", download: "Download", delete: "Delete",
     createFolder: "New Folder", uploadFile: "Upload File",
@@ -29,7 +29,15 @@ export const TRANSLATIONS: Record<Language, any> = {
     allFolders: "Full Library",
     slogan: "Your Knowledge, Amplified by Intelligence.",
     uploading: "Processing files...",
-    selectToChat: "Select files to include in conversation"
+    selectToChat: "Select files to include in conversation",
+    personalFolder: "Personal",
+    departments: "Departments",
+    addUser: "Create User",
+    deptManagement: "Org Structure",
+    noDept: "Public / No Dept",
+    selectDept: "Select Department",
+    orgChart: "Organization",
+    createDept: "Create Department"
   },
   Vietnamese: {
     langCode: "VN", home: "Trang chủ", research: "Nghiên cứu", library: "Thư viện",
@@ -37,7 +45,7 @@ export const TRANSLATIONS: Record<Language, any> = {
     welcome: "Chào mừng", login: "Đăng nhập", logout: "Đăng xuất",
     approve: "Duyệt", reject: "Từ chối", status: "Trạng thái",
     pending: "Chờ duyệt", approved: "Đã duyệt",
-    userMgmt: "Phân quyền User", searchPlaceholder: "Hỏi bất cứ điều gì về tài liệu của bạn...",
+    userMgmt: "Quản lý User", searchPlaceholder: "Hỏi bất cứ điều gì về tài liệu của bạn...",
     brandName: "DocuMind", portalName: "Cổng thông tin",
     history: "Lịch sử", download: "Tải về", delete: "Xóa",
     createFolder: "Thư mục mới", uploadFile: "Tải file lên",
@@ -58,11 +66,19 @@ export const TRANSLATIONS: Record<Language, any> = {
     allFolders: "Toàn bộ thư viện",
     slogan: "Tri thức của bạn, Sức mạnh của chúng tôi.",
     uploading: "Đang xử lý tài liệu...",
-    selectToChat: "Chọn tài liệu để bắt đầu trò chuyện"
+    selectToChat: "Chọn tài liệu để bắt đầu trò chuyện",
+    personalFolder: "Cá nhân",
+    departments: "Phòng ban",
+    addUser: "Tạo User",
+    deptManagement: "Cơ cấu tổ chức",
+    noDept: "Công khai / Không PB",
+    selectDept: "Chọn phòng ban",
+    orgChart: "Sơ đồ tổ chức",
+    createDept: "Tạo phòng ban"
   },
-  French: { langCode: "FR", slogan: "Votre savoir, amplifié.", allFolders: "Bibliothèque", selectFolderChat: "Contexte:", research: "Recherche", modeLibrary: "Bibliothèque", modeFocus: "Fichiers" },
-  German: { langCode: "DE", slogan: "Ihr Wissen, intelligent erweitert.", allFolders: "Bibliothek", selectFolderChat: "Kontext:", research: "Forschung", modeLibrary: "Bibliothek", modeFocus: "Dateien" },
-  Japanese: { langCode: "JP", slogan: "あなたの知識を、知能で強化する。", allFolders: "全ライブラリ", selectFolderChat: "コンテキスト:", research: "研究", modeLibrary: "ライブラリ", modeFocus: "ファイル" },
-  Korean: { langCode: "KR", slogan: "당신의 지식, 지능으로 증폭되다.", allFolders: "전체 라이브러리", selectFolderChat: "컨텍스트:", research: "연구", modeLibrary: "라이브러리", modeFocus: "파일" },
-  Chinese: { langCode: "CN", slogan: "您的知识，由智能赋能。", allFolders: "完整库", selectFolderChat: "背景:", research: "研究", modeLibrary: "图书馆", modeFocus: "文件" }
+  French: { langCode: "FR", slogan: "Votre savoir, amplifié.", allFolders: "Bibliothèque", selectFolderChat: "Contexte:", research: "Recherche", personalFolder: "Personnel" },
+  German: { langCode: "DE", slogan: "Ihr Wissen, intelligent erweitert.", allFolders: "Bibliothek", selectFolderChat: "Kontext:", research: "Forschung", personalFolder: "Persönlich" },
+  Japanese: { langCode: "JP", slogan: "あなたの知識を、知能で強化する。", allFolders: "全ライブラリ", selectFolderChat: "コンテキスト:", research: "研究", personalFolder: "個人" },
+  Korean: { langCode: "KR", slogan: "당신의 지식, 지능으로 증폭되다.", allFolders: "전체 라이브러리", selectFolderChat: "컨텍스트:", research: "연구", personalFolder: "개인" },
+  Chinese: { langCode: "CN", slogan: "您的知识，由智能赋能。", allFolders: "完整库", selectFolderChat: "背景:", research: "研究", personalFolder: "个人" }
 };

@@ -1,8 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-/* Fix: replaced non-existent MessageSquareSparkles with Sparkles from lucide-react */
-import { FolderPlus, Upload, ChevronRight, Folder, FileText, Presentation, ChevronLeft, MoreVertical, Trash2, Search, X, Sparkles } from 'lucide-react';
-import { Folder as FolderType, Document, DocStatus } from '../types';
+import { FolderPlus, Upload, ChevronRight, Folder, FileText, Presentation, ChevronLeft, Trash2, Search, X, Sparkles } from 'lucide-react';
+import { Folder as FolderType, Document } from '../types';
 
 interface FoldersViewProps {
   t: any;
@@ -14,7 +13,7 @@ interface FoldersViewProps {
   onUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onFilePreview: (doc: Document) => void;
   onDeleteFolder: (id: string) => void;
-  onChatWithFolder: (folderId: string) => void; // Prop mới để bắt đầu chat với folder
+  onChatWithFolder: (folderId: string) => void;
 }
 
 const FoldersView: React.FC<FoldersViewProps> = ({
@@ -26,7 +25,6 @@ const FoldersView: React.FC<FoldersViewProps> = ({
 
   const currentFolder = folders.find(f => f.id === currentFolderId);
   
-  // Lọc thư mục con và tài liệu theo thư mục hiện tại và từ khóa tìm kiếm
   const filteredSubFolders = useMemo(() => {
     return folders.filter(f => 
       f.parentId === currentFolderId && 
@@ -42,7 +40,6 @@ const FoldersView: React.FC<FoldersViewProps> = ({
     );
   }, [documents, currentFolderId, searchQuery]);
 
-  // Kiểm tra xem có tài liệu nào đã được duyệt để chat không
   const hasApprovedDocs = useMemo(() => {
     return documents.some(d => d.folderId === currentFolderId && d.status === 'approved' && !d.isDeleted);
   }, [documents, currentFolderId]);
@@ -85,7 +82,6 @@ const FoldersView: React.FC<FoldersViewProps> = ({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* Thanh tìm kiếm trong thư mục */}
           <div className="relative group mr-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
             <input 
@@ -110,7 +106,6 @@ const FoldersView: React.FC<FoldersViewProps> = ({
               onClick={() => onChatWithFolder(currentFolderId)}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black text-xs shadow-lg hover:scale-105 transition-all animate-in zoom-in-95"
             >
-              {/* Fix: replaced non-existent MessageSquareSparkles with Sparkles */}
               <Sparkles className="w-4 h-4" /> Hỏi AI về thư mục
             </button>
           )}
@@ -157,15 +152,17 @@ const FoldersView: React.FC<FoldersViewProps> = ({
               </div>
               <div>
                 <h4 className="font-bold text-sm dark:text-white truncate">{folder.name}</h4>
-                <p className="text-[9px] font-black text-slate-400 uppercase">Folder</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase">{folder.isSystem ? 'System Folder' : 'Folder'}</p>
               </div>
             </div>
-            <button 
-              onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); }}
-              className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-all"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {!folder.isSystem && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); }}
+                className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </div>
         ))}
         

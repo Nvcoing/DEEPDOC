@@ -14,12 +14,19 @@ export interface ActivityLog {
   details?: string;
 }
 
+export interface Department {
+  id: string;
+  name: string;
+  description?: string;
+}
+
 export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string; // Mật khẩu đăng nhập
   role: UserRole;
-  department?: string;
+  departmentId?: string;
   allowedDocIds?: string[];
 }
 
@@ -30,6 +37,7 @@ export interface Folder {
   departmentId?: string;
   status: DocStatus;
   userId: string;
+  isSystem?: boolean;
 }
 
 export interface Document {
@@ -43,7 +51,7 @@ export interface Document {
   status: DocStatus;
   isDeleted?: boolean;
   fileData?: string;
-  folderId?: string; // ID của thư mục chứa file
+  folderId?: string;
 }
 
 export interface Message {
@@ -59,6 +67,7 @@ export interface ChatSession {
   title: string;
   messages: Message[];
   selectedDocIds: string[];
+  selectedFolderIds: string[];
   lastUpdated: string;
   mode: ResearchMode;
 }

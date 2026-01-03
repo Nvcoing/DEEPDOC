@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Library, LayoutDashboard, FolderTree, Trash2, Languages, Sun, Moon, Monitor, ShieldCheck, LogOut, Clock } from 'lucide-react';
-import { Language, Theme, ViewType, UserRole } from '../types';
+import { Language, Theme, ViewType, UserRole, User, Department } from '../types';
 
 interface HeaderProps {
   t: any;
@@ -12,11 +12,13 @@ interface HeaderProps {
   theme: Theme;
   setTheme: (t: Theme) => void;
   langCodes: {lang: string, code: string}[];
-  userRole?: UserRole;
+  // Fix: Property 'user' and 'departments' should be in props to match usage in App.tsx
+  user: User | null;
+  departments: Department[];
   onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, userRole, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, user, departments, onLogout }) => {
   const toggleTheme = () => {
     if (theme === 'light') setTheme('dark');
     else if (theme === 'dark') setTheme('auto');
@@ -46,7 +48,8 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
           >
             <LayoutDashboard className="w-3.5 h-3.5" /> {t.home}
           </button>
-          {userRole === 'admin' && (
+          {/* Fix: check role from user object */}
+          {user?.role === 'admin' && (
             <button 
               onClick={() => setView('admin-panel')} 
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'admin-panel' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
