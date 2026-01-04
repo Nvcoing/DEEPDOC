@@ -12,10 +12,11 @@ import FoldersView from './components/FoldersView';
 import HistoryView from './components/HistoryView';
 import ProfileView from './components/ProfileView';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
+import { uploadFilesToBackend, deleteFilePermanently } from './apiService';
 
 const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Admin Cao Vũ', email: 'caovu9523@gmail.com', password: '09052003', role: 'admin', allowedDocIds: [] },
-  { id: 'u2', name: 'User Nhân Viên', email: 'user@documind.ai', password: 'password123', role: 'user', allowedDocIds: [] }
+  { id: 'u2', name: 'User Cao Vũ', email: 'caovu9523@gmail.com', password: '09052003', role: 'user', allowedDocIds: [] }
 ];
 
 const App: React.FC = () => {
@@ -49,7 +50,6 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
 
-  // Chat sessions riêng biệt cho từng User
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
 
   useEffect(() => {
@@ -135,29 +135,66 @@ const App: React.FC = () => {
     const files = e.target.files;
     if (!files || !currentUser || files.length === 0) return;
     setIsUploading(true);
+    
     try {
+      const result = await uploadFilesToBackend(Array.from(files));
+      
       const newDocs: Document[] = [];
       const targetFolderId = view === 'folders' ? currentFolderId : personalFolderId;
       const isAutoApprove = currentUser.role === 'admin' || targetFolderId === personalFolderId;
+
       Array.from(files).forEach((file: any) => {
         const type = file.name.split('.').pop()?.toLowerCase() as any;
         const newDoc: Document = {
-          id: `d-${Date.now()}-${Math.random()}`, userId: currentUser.id, name: file.name, type: type || 'txt', 
-          uploadDate: new Date().toLocaleDateString(), size: file.size, content: "Nội dung...", 
-          status: isAutoApprove ? 'approved' : 'pending', isDeleted: false, folderId: targetFolderId || undefined
+          id: `d-${Date.now()}-${Math.random()}`, 
+          userId: currentUser.id, 
+          name: file.name, 
+          type: type || 'txt', 
+          uploadDate: new Date().toLocaleDateString(), 
+          size: file.size, 
+          content: "Tài liệu đã được tải lên và sẵn sàng phân tích.", 
+          status: isAutoApprove ? 'approved' : 'pending', 
+          isDeleted: false, 
+          folderId: targetFolderId || undefined,
+          fileData: URL.createObjectURL(file)
         };
         newDocs.push(newDoc);
         setActivities(prev => [...prev, { id: `act-${Date.now()}`, type: 'upload', name: file.name, timestamp: new Date().toISOString() }]);
       });
+
       setDocuments(prev => [...prev, ...newDocs]);
+      
       if (forCurrentSession && activeSession) {
         setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, selectedDocIds: [...s.selectedDocIds, ...newDocs.map(d => d.id)] } : s));
       }
-      showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên, chờ duyệt.");
+      
+      showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên hệ thống, chờ xét duyệt tri thức.");
     } catch (err) {
-      showToast("Lỗi!", "error");
+      console.error(err);
+      showToast("Tải lên thất bại!", "error");
     } finally {
       setIsUploading(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleFileDelete = async (id: string) => {
+    const doc = documents.find(d => d.id === id);
+    if (!doc) return;
+
+    try {
+      if (doc.isDeleted) {
+        if (window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${doc.name}?`)) {
+          await deleteFilePermanently(doc.name);
+          setDocuments(prev => prev.filter(d => d.id !== id));
+          showToast("Đã xóa vĩnh viễn.");
+        }
+      } else {
+        setDocuments(prev => prev.map(d => d.id === id ? {...d, isDeleted: true} : d));
+        showToast("Đã chuyển vào thùng rác.");
+      }
+    } catch (err) {
+      showToast("Lỗi khi xóa tệp.", "error");
     }
   };
 
@@ -171,20 +208,6 @@ const App: React.FC = () => {
     setActiveSessionId(newId);
     setSelectedDocIds(selectedIds);
     setView('chat');
-  };
-
-  const handleSendMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!inputValue.trim() || isLoading || !activeSession || !currentUser) return;
-    const userMsg: Message = { id: Date.now().toString(), role: 'user', content: inputValue, timestamp: new Date().toISOString() };
-    const aiMsgId = (Date.now() + 1).toString();
-    setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: [...s.messages, userMsg, { id: aiMsgId, role: 'assistant', content: "...", timestamp: new Date().toISOString() }] } : s));
-    setInputValue('');
-    setIsLoading(true);
-    setTimeout(() => {
-      setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, messages: s.messages.map(m => m.id === aiMsgId ? { ...m, content: "Tôi đã nhận được yêu cầu của bạn." } : m) } : s));
-      setIsLoading(false);
-    }, 1000);
   };
 
   if (!currentUser) return <Login users={users} onLogin={(user) => { setCurrentUser(user); setView('dashboard'); }} t={t} />;
@@ -208,7 +231,7 @@ const App: React.FC = () => {
               <Dashboard 
                 t={t} chatSessions={chatSessions} documents={accessibleDocs} onCreateSession={() => createNewSession(t.startNew)} 
                 onOpenSession={(id) => { setActiveSessionId(id); setView('chat'); }} onFileAction={(d) => createNewSession(d.name, [d.id])}
-                onFileUpload={(e) => handleFileUpload(e, false)} onPreview={setPreviewDoc} onDelete={(id) => setDocuments(prev => prev.map(d => d.id === id ? {...d, isDeleted: !d.isDeleted} : d))}
+                onFileUpload={(e) => handleFileUpload(e, false)} onPreview={setPreviewDoc} onDelete={handleFileDelete}
                 viewMode={view === 'trash' ? 'trash' : 'all'} trendingNews={[]} isNewsLoading={false} onNewsAction={() => {}}
               />
             </div>
@@ -243,7 +266,7 @@ const App: React.FC = () => {
           ) : activeSession && (
             <ChatView 
               t={t} activeSession={activeSession} researchMode={researchMode} setResearchMode={setResearchMode} onBack={() => setView('dashboard')} 
-              onFileUpload={(e) => handleFileUpload(e, true)} onSendMessage={handleSendMessage} 
+              onFileUpload={(e) => handleFileUpload(e, true)} onSendMessage={() => {}} 
               inputValue={inputValue} setInputValue={setInputValue} 
               isLoading={isLoading} isUploading={isUploading} fileInputRef={fileInputRef} folders={visibleFolders} 
               onToggleFolderInChat={() => {}} selectedFolderIds={[]}

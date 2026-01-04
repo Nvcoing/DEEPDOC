@@ -4,6 +4,7 @@ import { ChevronLeft, Upload, MessageSquare, ChevronDown, Loader2, CheckCircle2,
 import { ChatSession, Folder as FolderType, Document, ResearchMode } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { generateAnswerFromBackend } from '../apiService';
 
 interface ChatViewProps {
   t: any;
@@ -30,7 +31,9 @@ const ChatView: React.FC<ChatViewProps> = ({
   t, activeSession, researchMode, setResearchMode, onBack, onFileUpload, onSendMessage, inputValue, setInputValue, isLoading, isUploading, fileInputRef, folders, onToggleFolderInChat, selectedFolderIds, sessionDocs, selectedDocIds, onToggleDoc
 }) => {
   const [isFolderMenuOpen, setIsFolderMenuOpen] = useState(false);
+  const [isAiThinking, setIsAiThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [streamingContent, setStreamingContent] = useState<string>("");
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -38,11 +41,73 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   useEffect(() => {
     scrollToBottom();
-  }, [activeSession.messages.length, isLoading]);
+  }, [activeSession.messages.length, isAiThinking, streamingContent]);
+
+  const handleChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputValue.trim() || isAiThinking) return;
+
+    const userQuestion = inputValue;
+    setInputValue('');
+    
+    // 1. Thêm tin nhắn user
+    const userMsg = { 
+      id: Date.now().toString(), 
+      role: 'user' as const, 
+      content: userQuestion, 
+      timestamp: new Date().toISOString() 
+    };
+    activeSession.messages.push(userMsg);
+    
+    setIsAiThinking(true);
+    setStreamingContent("");
+
+    try {
+      // Lấy tên các file đang được chọn
+      const selectedFileNames = sessionDocs
+        .filter(d => selectedDocIds.includes(d.id))
+        .map(d => d.name);
+
+      // Nếu không chọn file nào, mặc định dùng tất cả file trong phiên
+      const contextFiles = selectedFileNames.length > 0 
+        ? selectedFileNames 
+        : sessionDocs.map(d => d.name);
+
+      const stream = generateAnswerFromBackend(userQuestion, contextFiles);
+      
+      let fullContent = "";
+      for await (const chunk of stream) {
+        setIsAiThinking(false); // Khi bắt đầu nhận stream thì tắt trạng thái "đang nghĩ"
+        fullContent += chunk;
+        setStreamingContent(fullContent);
+      }
+
+      // 2. Thêm tin nhắn AI hoàn chỉnh sau khi stream xong
+      const aiMsg = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant' as const, 
+        content: fullContent, 
+        timestamp: new Date().toISOString() 
+      };
+      activeSession.messages.push(aiMsg);
+      setStreamingContent("");
+
+    } catch (err) {
+      const errorMsg = { 
+        id: (Date.now() + 1).toString(), 
+        role: 'assistant' as const, 
+        content: "Hệ thống gặp sự cố kết nối: " + (err as Error).message, 
+        timestamp: new Date().toISOString() 
+      };
+      activeSession.messages.push(errorMsg);
+    } finally {
+      setIsAiThinking(false);
+      setStreamingContent("");
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden relative">
-      {/* Session Toolbar */}
       <header className="h-14 flex-shrink-0 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-20">
         <div className="flex items-center gap-4 min-w-0 flex-1">
           <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
@@ -50,14 +115,14 @@ const ChatView: React.FC<ChatViewProps> = ({
           </button>
           
           <div className="flex flex-col min-w-0">
-             <h2 className="font-black text-xs tracking-tight dark:text-white truncate uppercase">{activeSession.title}</h2>
+             <h2 className="font-black text-xs tracking-tight dark:text-white truncate uppercase italic">{activeSession.title}</h2>
              <div className="relative">
                 <button 
                   onClick={() => setIsFolderMenuOpen(!isFolderMenuOpen)}
                   className="flex items-center gap-1.5 mt-0.5 group"
                 >
                   <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500 transition-colors">{t.selectFolderChat}</span>
-                  <div className="bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md flex items-center gap-1 transition-all">
+                  <div className="bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md flex items-center gap-1">
                     <span className="text-[9px] font-bold text-indigo-600">
                       {selectedFolderIds.length === 0 ? t.allFolders : `${selectedFolderIds.length} ${t.folderMgmt}`}
                     </span>
@@ -102,7 +167,6 @@ const ChatView: React.FC<ChatViewProps> = ({
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        {/* Context Sidebar (Left) */}
         <aside className="hidden md:flex w-72 border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 overflow-y-auto p-5 flex-col space-y-4 flex-shrink-0 scrollbar-hide">
            <div className="flex items-center justify-between px-2 mb-2">
              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t.focusedDocs}</h3>
@@ -110,9 +174,14 @@ const ChatView: React.FC<ChatViewProps> = ({
            </div>
            
            {isUploading && (
-             <div className="flex items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl border border-indigo-100 dark:border-indigo-800 animate-pulse">
-               <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-               <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Tải lên...</span>
+             <div className="flex flex-col gap-3 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800">
+               <div className="flex items-center gap-2">
+                 <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
+                 <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Đang tải tệp...</span>
+               </div>
+               <div className="w-full h-1 bg-indigo-100 dark:bg-indigo-800 rounded-full overflow-hidden">
+                 <div className="h-full bg-indigo-500 animate-shimmer bg-[length:200%_100%] shimmer-bg" />
+               </div>
              </div>
            )}
 
@@ -143,7 +212,6 @@ const ChatView: React.FC<ChatViewProps> = ({
            </div>
         </aside>
 
-        {/* Chat Conversation Area (Main) */}
         <div className="flex-1 flex flex-col relative overflow-hidden bg-white dark:bg-slate-950">
           <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-10 scrollbar-hide pb-40">
             {activeSession.messages.length === 0 && (
@@ -151,7 +219,7 @@ const ChatView: React.FC<ChatViewProps> = ({
                 <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-blue-700 rounded-[2.5rem] flex items-center justify-center shadow-2xl mb-8 transform hover:scale-105 transition-transform duration-500">
                   <Sparkles className="w-12 h-12 text-white" />
                 </div>
-                <h3 className="text-3xl font-black tracking-tighter dark:text-white uppercase mb-3">{t.brandName} AI</h3>
+                <h3 className="text-3xl font-black tracking-tighter dark:text-white uppercase mb-3 italic">{t.brandName} AI</h3>
                 <p className="text-slate-500 dark:text-slate-400 text-[11px] font-bold leading-relaxed px-6 italic">{t.slogan}</p>
               </div>
             )}
@@ -163,14 +231,9 @@ const ChatView: React.FC<ChatViewProps> = ({
                     {m.role === 'user' ? <UserIcon className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
                   </div>
                   <div className={`group relative max-w-[82%] px-7 py-6 rounded-[2.5rem] shadow-sm text-sm leading-relaxed ${m.role === 'user' ? 'bg-indigo-600 text-white font-medium shadow-indigo-100 dark:shadow-none' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 dark:text-slate-200'}`}>
-                    {m.role === 'assistant' ? (
-                      <div className="prose dark:prose-invert">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
-                      </div>
-                    ) : (
-                      <span className="text-[15px]">{m.content}</span>
-                    )}
-                    
+                    <div className="prose dark:prose-invert">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                    </div>
                     <span className={`absolute top-full mt-2 text-[8px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity ${m.role === 'user' ? 'right-6 text-indigo-400' : 'left-6 text-slate-400'}`}>
                       {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : ''}
                     </span>
@@ -178,25 +241,31 @@ const ChatView: React.FC<ChatViewProps> = ({
                 </div>
               ))}
               
-              {/* Professional Shimmer Thinking Animation */}
-              {isLoading && (
+              {/* Hiển thị Streaming Content */}
+              {streamingContent && (
+                <div className="flex gap-5 animate-in fade-in duration-300">
+                  <div className="w-11 h-11 flex-shrink-0 rounded-[1.2rem] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg">
+                    <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-7 py-6 rounded-[2.5rem] shadow-sm w-full prose dark:prose-invert">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+                  </div>
+                </div>
+              )}
+
+              {isAiThinking && (
                 <div className="flex gap-5 animate-in fade-in duration-300">
                   <div className="w-11 h-11 flex-shrink-0 rounded-[1.2rem] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg">
                     <Bot className="w-5 h-5 text-indigo-500 animate-bounce-subtle" />
                   </div>
-                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-8 py-7 rounded-[2.5rem] shadow-sm w-full max-w-sm overflow-hidden relative">
-                    <div className="space-y-4 relative z-10">
+                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-8 py-7 rounded-[2.5rem] shadow-sm w-full max-w-sm">
+                    <div className="space-y-4">
                       <div className="flex items-center gap-3">
                          <div className="w-3 h-3 bg-indigo-500 rounded-full shadow-[0_0_12px_rgba(99,102,241,0.6)] animate-pulse" />
-                         <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] italic animate-pulse-slow">DocuMind AI đang xử lý tri thức...</span>
+                         <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] italic animate-pulse-slow">Đang truy xuất tri thức...</span>
                       </div>
-                      <div className="space-y-2.5">
-                        <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500/10 to-transparent animate-shimmer bg-[length:200%_100%] shimmer-bg" />
-                        </div>
-                        <div className="h-2 w-2/3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative opacity-60">
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-indigo-500/10 to-transparent animate-shimmer bg-[length:200%_100%] delay-300 shimmer-bg" />
-                        </div>
+                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div className="h-full bg-indigo-500 animate-shimmer bg-[length:200%_100%] shimmer-bg" />
                       </div>
                     </div>
                   </div>
@@ -206,9 +275,8 @@ const ChatView: React.FC<ChatViewProps> = ({
             </div>
           </div>
 
-          {/* Sticky Fixed Input Bar with Glassmorphism */}
           <div className="absolute bottom-0 left-0 right-0 p-8 md:p-10 bg-gradient-to-t from-white dark:from-slate-950 via-white/95 dark:via-slate-950/95 to-transparent z-30">
-            <form onSubmit={onSendMessage} className="max-w-3xl mx-auto relative group">
+            <form onSubmit={handleChat} className="max-w-3xl mx-auto relative group">
               <input 
                 type="text" 
                 value={inputValue} 
@@ -218,14 +286,14 @@ const ChatView: React.FC<ChatViewProps> = ({
               />
               <button 
                 type="submit" 
-                disabled={!inputValue.trim() || isLoading} 
+                disabled={!inputValue.trim() || isAiThinking || streamingContent !== ""} 
                 className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-indigo-600 text-white p-5 rounded-full hover:bg-indigo-700 shadow-xl shadow-indigo-200 dark:shadow-none transition-all disabled:opacity-40 active:scale-90 flex items-center justify-center h-[58px] w-[58px]"
               >
                 <ChevronRight className="w-8 h-8" />
               </button>
             </form>
             <p className="text-center text-[8px] text-slate-400 font-black uppercase tracking-[0.3em] mt-6 opacity-60">
-              Hệ thống AI chuyên sâu về quản lý tri thức doanh nghiệp
+              AI Chuyên Sâu • Đọc Hiểu Đa Tầng • Trí Tuệ DocuMind
             </p>
           </div>
         </div>

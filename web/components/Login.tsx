@@ -98,12 +98,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
           >
             Đăng nhập hệ thống <ArrowRight className="w-4 h-4" />
           </button>
-          
-          <div className="text-center">
-            <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-              Gợi ý (Admin): caovu9523@gmail.com / 09052003
-            </p>
-          </div>
         </form>
       </div>
     </div>

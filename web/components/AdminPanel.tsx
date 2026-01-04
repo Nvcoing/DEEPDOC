@@ -1,7 +1,8 @@
 
 import React, { useState, useMemo } from 'react';
-import { ShieldCheck, CheckCircle, XCircle, Users, FileText, Lock, Building2, UserPlus, FolderEdit, Save, Trash2, LayoutGrid, ChevronRight, UserCircle, Plus, X, FolderPlus, Upload, ChevronLeft, UserMinus, Folder } from 'lucide-react';
+import { ShieldCheck, CheckCircle, XCircle, Users, FileText, Lock, Building2, UserPlus, FolderEdit, Save, Trash2, LayoutGrid, ChevronRight, UserCircle, Plus, X, FolderPlus, Upload, ChevronLeft, UserMinus, Folder as FolderIcon, Loader2 } from 'lucide-react';
 import { Document, User, DocStatus, Department, Folder as FolderType } from '../types';
+import { uploadFileToBackend } from '../apiService';
 
 interface AdminPanelProps {
   t: any;
@@ -23,17 +24,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'pending' | 'depts' | 'users'>('depts');
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
+  const [selectedSubFolderId, setSelectedSubFolderId] = useState<string | null>(null);
+  
   const [isAddingDept, setIsAddingDept] = useState(false);
   const [isAddingUserGlobal, setIsAddingUserGlobal] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [showAddUserToDept, setShowAddUserToDept] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [newFolderName, setNewFolderName] = useState('');
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'user' as const, departmentId: '' });
 
   const selectedDept = useMemo(() => departments.find(d => d.id === selectedDeptId), [departments, selectedDeptId]);
+  const currentSubFolder = useMemo(() => folders.find(f => f.id === selectedSubFolderId), [folders, selectedSubFolderId]);
+  
   const deptUsers = useMemo(() => users.filter(u => u.departmentId === selectedDeptId), [users, selectedDeptId]);
-  const deptFolders = useMemo(() => folders.filter(f => f.departmentId === selectedDeptId), [folders, selectedDeptId]);
+  
+  const currentLevelFolders = useMemo(() => 
+    folders.filter(f => f.departmentId === selectedDeptId && f.parentId === selectedSubFolderId),
+    [folders, selectedDeptId, selectedSubFolderId]
+  );
+  
+  const currentLevelDocs = useMemo(() => 
+    allDocs.filter(d => d.departmentId === selectedDeptId && d.folderId === (selectedSubFolderId || undefined) && d.status === 'approved'),
+    [allDocs, selectedDeptId, selectedSubFolderId]
+  );
+
   const deptPendingDocs = useMemo(() => pendingDocs.filter(d => d.departmentId === selectedDeptId), [pendingDocs, selectedDeptId]);
   const usersNotInDept = useMemo(() => users.filter(u => u.departmentId !== selectedDeptId && u.role !== 'admin'), [users, selectedDeptId]);
 
@@ -41,6 +57,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     if (!newDeptName.trim()) return;
     setDepartments([...departments, { id: `dept-${Date.now()}`, name: newDeptName }]);
     setNewDeptName(''); setIsAddingDept(false);
+  };
+
+  // Fix: Added handleAddUserToDept to add users to departments
+  const handleAddUserToDept = (userId: string) => {
+    if (!selectedDeptId) return;
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, departmentId: selectedDeptId } : u));
+  };
+
+  // Fix: Added handleRemoveUserFromDept to remove users from departments
+  const handleRemoveUserFromDept = (userId: string) => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, departmentId: undefined } : u));
   };
 
   const handleAddUserGlobal = () => {
@@ -53,34 +80,68 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleCreateDeptFolder = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFolderName.trim() || !selectedDeptId) return;
-    setFolders([...folders, { id: `f-${Date.now()}`, name: newFolderName, parentId: null, departmentId: selectedDeptId, status: 'approved', userId: 'admin' }]);
-    setNewFolderName(''); setIsCreatingFolder(false);
+    const newFolder: FolderType = { 
+      id: `f-${Date.now()}`, 
+      name: newFolderName, 
+      parentId: selectedSubFolderId, 
+      departmentId: selectedDeptId, 
+      status: 'approved', 
+      userId: 'admin' 
+    };
+    setFolders([...folders, newFolder]);
+    setNewFolderName(''); 
+    setIsCreatingFolder(false);
   };
 
-  const handleAddUserToDept = (userId: string) => {
-    setUsers(users.map(u => u.id === userId ? { ...u, departmentId: selectedDeptId! } : u));
-    setShowAddUserToDept(false);
-  };
-
-  const handleRemoveUserFromDept = (userId: string) => {
-    setUsers(users.map(u => u.id === userId ? { ...u, departmentId: undefined } : u));
-  };
-
-  const handleDeptFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDeptFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !selectedDeptId) return;
-    const newDocs: Document[] = Array.from(files).map(file => ({
-      id: `d-${Date.now()}-${Math.random()}`, userId: 'admin', name: file.name, type: (file.name.split('.').pop() as any) || 'txt',
-      uploadDate: new Date().toLocaleDateString(), size: file.size, content: "...", status: 'approved', departmentId: selectedDeptId
-    }));
-    setDocuments(prev => [...prev, ...newDocs]);
+    
+    setIsUploading(true);
+    const fileList = Array.from(files);
+    
+    try {
+      const uploadedDocs: Document[] = [];
+      for (const file of fileList) {
+        // Gọi API upload thực tế
+        const response = await uploadFileToBackend(file, selectedSubFolderId || undefined, selectedDeptId);
+        
+        const newDoc: Document = {
+          id: response.id || `d-${Date.now()}-${Math.random()}`, 
+          userId: 'admin', 
+          name: file.name, 
+          type: (file.name.split('.').pop() as any) || 'txt',
+          uploadDate: new Date().toLocaleDateString(), 
+          size: file.size, 
+          content: "Tài liệu đã được phân tích...", 
+          status: 'approved', 
+          departmentId: selectedDeptId,
+          folderId: selectedSubFolderId || undefined,
+          fileData: response.url || URL.createObjectURL(file) // Lưu URL để preview
+        };
+        uploadedDocs.push(newDoc);
+      }
+      setDocuments(prev => [...prev, ...uploadedDocs]);
+    } catch (err) {
+      alert("Lỗi tải lên: " + (err as Error).message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleNavigateBack = () => {
+    if (selectedSubFolderId) {
+      setSelectedSubFolderId(currentSubFolder?.parentId || null);
+    } else {
+      setSelectedDeptId(null);
+    }
   };
 
   return (
     <div className="p-6 md:p-10 max-w-7xl mx-auto space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-8 border-b border-slate-100 dark:border-slate-800 pb-10">
         <div className="flex items-center gap-4">
-          <div className="p-4 bg-indigo-600 text-white rounded-3xl shadow-xl shadow-indigo-100 dark:shadow-none"><ShieldCheck className="w-8 h-8" /></div>
+          <div className="p-4 bg-indigo-600 text-white rounded-3xl shadow-xl"><ShieldCheck className="w-8 h-8" /></div>
           <div><h2 className="text-4xl font-black tracking-tighter dark:text-white uppercase italic">{t.adminPanel}</h2></div>
         </div>
         <nav className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 p-1.5 rounded-2xl">
@@ -89,7 +150,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             { id: 'depts', label: t.orgChart, icon: Building2 },
             { id: 'users', label: t.userMgmt, icon: UserPlus },
           ].map(tab => (
-            <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSelectedDeptId(null); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-xl text-xs font-black transition-all ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-md' : 'text-slate-500'}`}>
+            <button key={tab.id} onClick={() => { setActiveTab(tab.id as any); setSelectedDeptId(null); setSelectedSubFolderId(null); }} className={`flex items-center gap-2 px-6 py-3.5 rounded-xl text-xs font-black transition-all ${activeTab === tab.id ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-md' : 'text-slate-500'}`}>
               <tab.icon className="w-4 h-4" /> {tab.label.toUpperCase()}
             </button>
           ))}
@@ -132,7 +193,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {departments.map(dept => (
-                <div key={dept.id} onClick={() => setSelectedDeptId(dept.id)} className="group bg-white dark:bg-slate-900 border border-slate-100 p-8 rounded-[2.5rem] flex flex-col gap-6 hover:border-indigo-400 hover:shadow-2xl cursor-pointer relative overflow-hidden">
+                <div key={dept.id} onClick={() => { setSelectedDeptId(dept.id); setSelectedSubFolderId(null); }} className="group bg-white dark:bg-slate-900 border border-slate-100 p-8 rounded-[2.5rem] flex flex-col gap-6 hover:border-indigo-400 hover:shadow-2xl cursor-pointer relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100"><ChevronRight className="w-6 h-6 text-indigo-500" /></div>
                   <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center"><Building2 className="w-8 h-8" /></div>
                   <div><h4 className="font-black text-xl dark:text-white uppercase italic">{dept.name}</h4></div>
@@ -144,56 +205,122 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {activeTab === 'depts' && selectedDeptId && selectedDept && (
           <div className="space-y-10 animate-in slide-in-from-right-10">
-            <button onClick={() => setSelectedDeptId(null)} className="flex items-center gap-2 text-slate-400 hover:text-indigo-600 font-black text-[10px] uppercase"><ChevronLeft className="w-4 h-4" /> Quay lại</button>
-            
-            {/* Duyệt File Tại Chỗ */}
-            {deptPendingDocs.length > 0 && (
-              <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 p-6 rounded-[2.5rem] space-y-4">
-                <h4 className="font-black text-sm uppercase text-blue-600">Tài liệu chờ duyệt ({deptPendingDocs.length})</h4>
-                <div className="grid gap-3">
-                  {deptPendingDocs.map(doc => (
-                    <div key={doc.id} className="bg-white dark:bg-slate-900 p-4 rounded-2xl flex items-center justify-between border border-blue-200">
-                      <div className="flex items-center gap-3"><FileText className="w-5 h-5 text-blue-500" /><span className="text-xs font-bold">{doc.name}</span></div>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => onApprove(doc.id, 'rejected')} className="p-2 text-red-500 hover:bg-red-50 rounded-lg"><X className="w-4 h-4" /></button>
-                        <button onClick={() => onApprove(doc.id, 'approved')} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase">Duyệt</button>
-                      </div>
-                    </div>
-                  ))}
+            <div className="flex items-center gap-4">
+              <button onClick={handleNavigateBack} className="flex items-center gap-2 text-slate-400 hover:text-indigo-600 font-black text-[10px] uppercase">
+                <ChevronLeft className="w-4 h-4" /> {selectedSubFolderId ? 'Quay lại' : 'Danh sách Phòng ban'}
+              </button>
+              {selectedSubFolderId && (
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase text-slate-300">
+                  <span>/</span>
+                  <span className="text-slate-500">{selectedDept.name}</span>
+                  <span>/</span>
+                  <span className="text-indigo-600">{currentSubFolder?.name}</span>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             <div className="flex flex-col lg:flex-row gap-10">
-               <div className="flex-1 space-y-6">
-                  <div className="flex items-center justify-between"><h3 className="font-black text-xl flex items-center gap-2 dark:text-white"><Users className="w-6 h-6 text-indigo-500" /> Thành viên ({deptUsers.length})</h3><button onClick={() => setShowAddUserToDept(!showAddUserToDept)} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">{showAddUserToDept ? <X className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}</button></div>
-                  {showAddUserToDept && (
-                    <div className="bg-white border border-indigo-200 p-4 rounded-2xl shadow-xl space-y-2">
-                      {usersNotInDept.map(u => (
-                        <button key={u.id} onClick={() => handleAddUserToDept(u.id)} className="w-full flex items-center justify-between p-3 hover:bg-indigo-50 rounded-xl transition-all group">
-                          <span className="text-sm font-bold">{u.name}</span><Plus className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
-                        </button>
+               {!selectedSubFolderId && (
+                 <div className="flex-1 space-y-6">
+                    <div className="flex items-center justify-between"><h3 className="font-black text-xl flex items-center gap-2 dark:text-white"><Users className="w-6 h-6 text-indigo-500" /> Thành viên ({deptUsers.length})</h3><button onClick={() => setShowAddUserToDept(!showAddUserToDept)} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">{showAddUserToDept ? <X className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}</button></div>
+                    {showAddUserToDept && (
+                      <div className="bg-white border border-indigo-200 p-4 rounded-2xl shadow-xl space-y-2">
+                        {usersNotInDept.map(u => (
+                          <button key={u.id} onClick={() => handleAddUserToDept(u.id)} className="w-full flex items-center justify-between p-3 hover:bg-indigo-50 rounded-xl transition-all group">
+                            <span className="text-sm font-bold">{u.name}</span><Plus className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="grid gap-3">
+                      {deptUsers.map(user => (
+                        <div key={user.id} className="bg-white dark:bg-slate-900 border border-slate-100 p-4 rounded-2xl flex items-center justify-between group">
+                          <div className="flex items-center gap-4"><div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black">{user.name[0]}</div><div><p className="text-sm font-black dark:text-white">{user.name}</p></div></div>
+                          <button onClick={() => handleRemoveUserFromDept(user.id)} className="p-2 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><UserMinus className="w-4 h-4" /></button>
+                        </div>
                       ))}
                     </div>
-                  )}
-                  <div className="grid gap-3">
-                    {deptUsers.map(user => (
-                      <div key={user.id} className="bg-white dark:bg-slate-900 border border-slate-100 p-4 rounded-2xl flex items-center justify-between group">
-                        <div className="flex items-center gap-4"><div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center font-black">{user.name[0]}</div><div><p className="text-sm font-black dark:text-white">{user.name}</p></div></div>
-                        <button onClick={() => handleRemoveUserFromDept(user.id)} className="p-2 text-slate-200 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"><UserMinus className="w-4 h-4" /></button>
-                      </div>
-                    ))}
+                 </div>
+               )}
+
+               <div className={`${selectedSubFolderId ? 'w-full' : 'flex-[1.5]'} space-y-6`}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-black text-xl flex items-center gap-2 dark:text-white">
+                      <FolderIcon className="w-6 h-6 text-indigo-500" /> 
+                      {selectedSubFolderId ? currentSubFolder?.name : 'Tài liệu gốc'}
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        disabled={isUploading}
+                        onClick={() => setIsCreatingFolder(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-indigo-600 rounded-xl font-bold text-xs shadow-sm hover:bg-slate-50 transition-colors disabled:opacity-50"
+                      >
+                        <FolderPlus className="w-4 h-4" /> Thư mục mới
+                      </button>
+                      <label className={`flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md hover:bg-indigo-700 transition-colors ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                        {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                        {isUploading ? 'Đang tải...' : 'Tải tệp lên đây'}
+                        {!isUploading && <input type="file" className="hidden" multiple onChange={handleDeptFileUpload} />}
+                      </label>
+                    </div>
                   </div>
-               </div>
-               <div className="flex-[1.5] space-y-6">
-                  <div className="flex items-center justify-between"><h3 className="font-black text-xl flex items-center gap-2 dark:text-white"><Folder className="w-6 h-6 text-indigo-500" /> Tài liệu</h3><label className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-xs cursor-pointer shadow-md hover:bg-indigo-700 transition-colors"><Upload className="w-4 h-4" /> Tải lên<input type="file" className="hidden" multiple onChange={handleDeptFileUpload} /></label></div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     {allDocs.filter(d => d.departmentId === selectedDeptId && d.status === 'approved').map(doc => (
+
+                  {isCreatingFolder && (
+                    <form onSubmit={handleCreateDeptFolder} className="bg-white dark:bg-slate-900 border-2 border-indigo-500 p-4 rounded-2xl flex items-center gap-3 animate-in zoom-in-95 duration-200">
+                      <FolderIcon className="w-5 h-5 text-indigo-500" />
+                      <input 
+                        autoFocus
+                        type="text" 
+                        placeholder="Tên thư mục mới..."
+                        className="flex-1 bg-transparent border-none outline-none font-bold text-sm dark:text-white"
+                        value={newFolderName}
+                        onChange={(e) => setNewFolderName(e.target.value)}
+                      />
+                      <button type="button" onClick={() => setIsCreatingFolder(false)} className="text-[10px] font-black text-slate-400 uppercase">Hủy</button>
+                      <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-black uppercase">Tạo</button>
+                    </form>
+                  )}
+
+                  {isUploading && (
+                    <div className="p-10 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-[2.5rem] border-2 border-dashed border-indigo-200 flex flex-col items-center justify-center space-y-4 animate-pulse">
+                      <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
+                      <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Đang đẩy tệp lên trung tâm tri thức...</p>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                     {currentLevelFolders.map(folder => (
+                        <div 
+                          key={folder.id} 
+                          onClick={() => setSelectedSubFolderId(folder.id)}
+                          className="group bg-white dark:bg-slate-900 border-2 border-slate-50 dark:border-slate-800 p-5 rounded-[2rem] flex items-center gap-4 shadow-sm hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer"
+                        >
+                           <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-xl flex items-center justify-center">
+                              <FolderIcon className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                           </div>
+                           <div className="flex-1 min-w-0">
+                              <p className="font-bold text-sm truncate dark:text-white uppercase">{folder.name}</p>
+                              <p className="text-[9px] font-black uppercase text-slate-400">Thư mục con</p>
+                           </div>
+                           <ChevronRight className="w-4 h-4 text-slate-300" />
+                        </div>
+                     ))}
+
+                     {currentLevelDocs.map(doc => (
                        <div key={doc.id} className="bg-white dark:bg-slate-900 border border-slate-100 p-5 rounded-[2rem] flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
                           <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><FileText className="w-6 h-6" /></div>
-                          <div className="flex-1 min-w-0"><p className="font-bold text-sm truncate dark:text-white">{doc.name}</p><p className="text-[9px] font-black uppercase text-slate-400">{doc.type}</p></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm truncate dark:text-white">{doc.name}</p>
+                            <p className="text-[9px] font-black uppercase text-slate-400">{doc.type} • {doc.uploadDate}</p>
+                          </div>
                        </div>
                      ))}
+
+                     {currentLevelFolders.length === 0 && currentLevelDocs.length === 0 && !isUploading && (
+                       <div className="col-span-full py-16 text-center border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[2.5rem] opacity-40">
+                         <p className="text-[10px] font-black uppercase tracking-[0.2em]">Thư mục trống</p>
+                       </div>
+                     )}
                   </div>
                </div>
             </div>
