@@ -21,7 +21,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
     
     const foundUser = users.find(u => 
       u.email.toLowerCase() === email.toLowerCase() && 
-      (u.password === password || (!u.password && password === 'password123')) &&
+      u.password === password &&
       u.role === role
     );
 
@@ -101,7 +101,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
           
           <div className="text-center">
             <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-              Gợi ý: password123
+              Gợi ý (Admin): caovu9523@gmail.com / 09052003
             </p>
           </div>
         </form>

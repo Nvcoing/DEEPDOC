@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Library, LayoutDashboard, FolderTree, Trash2, Languages, Sun, Moon, Monitor, ShieldCheck, LogOut, Clock } from 'lucide-react';
+import { Library, LayoutDashboard, FolderTree, Trash2, Languages, Sun, Moon, Monitor, ShieldCheck, LogOut, Clock, User as UserIcon } from 'lucide-react';
 import { Language, Theme, ViewType, UserRole, User, Department } from '../types';
 
 interface HeaderProps {
@@ -12,7 +12,6 @@ interface HeaderProps {
   theme: Theme;
   setTheme: (t: Theme) => void;
   langCodes: {lang: string, code: string}[];
-  // Fix: Property 'user' and 'departments' should be in props to match usage in App.tsx
   user: User | null;
   departments: Department[];
   onLogout: () => void;
@@ -48,7 +47,7 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
           >
             <LayoutDashboard className="w-3.5 h-3.5" /> {t.home}
           </button>
-          {/* Fix: check role from user object */}
+          
           {user?.role === 'admin' && (
             <button 
               onClick={() => setView('admin-panel')} 
@@ -57,12 +56,16 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
               <ShieldCheck className="w-3.5 h-3.5" /> {t.adminPanel}
             </button>
           )}
-          <button 
-            onClick={() => setView('folders')} 
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'folders' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-          >
-            <FolderTree className="w-3.5 h-3.5" /> {t.folderMgmt}
-          </button>
+
+          {user?.role !== 'admin' && (
+            <button 
+              onClick={() => setView('folders')} 
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'folders' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            >
+              <FolderTree className="w-3.5 h-3.5" /> {t.folderMgmt}
+            </button>
+          )}
+
           <button 
             onClick={() => setView('history')} 
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'history' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
@@ -79,16 +82,21 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
       </div>
 
       <div className="flex items-center gap-2">
-        {/* Theme Toggle */}
+        <button 
+          onClick={() => setView('profile')}
+          className={`p-2 rounded-lg border transition-all ${view === 'profile' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+          title="Account Info"
+        >
+          <UserIcon className="w-4 h-4" />
+        </button>
+
         <button 
           onClick={toggleTheme}
           className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
-          title="Toggle Theme"
         >
           {getThemeIcon()}
         </button>
 
-        {/* Language Selector */}
         <div className="flex items-center gap-1 p-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
           <Languages className="w-3.5 h-3.5 text-blue-500 ml-1" />
           <select 

@@ -1,7 +1,7 @@
 
 export type Language = 'English' | 'Vietnamese' | 'French' | 'German' | 'Japanese' | 'Korean' | 'Chinese';
 export type Theme = 'light' | 'dark' | 'auto';
-export type ViewType = 'chat' | 'dashboard' | 'folders' | 'trash' | 'admin-panel' | 'history';
+export type ViewType = 'chat' | 'dashboard' | 'folders' | 'trash' | 'admin-panel' | 'history' | 'profile';
 export type ResearchMode = 'new' | 'library';
 export type UserRole = 'admin' | 'user';
 export type DocStatus = 'pending' | 'approved' | 'rejected';
@@ -24,7 +24,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string; // Mật khẩu đăng nhập
+  password?: string;
   role: UserRole;
   departmentId?: string;
   allowedDocIds?: string[];
@@ -52,6 +52,7 @@ export interface Document {
   isDeleted?: boolean;
   fileData?: string;
   folderId?: string;
+  departmentId?: string;
 }
 
 export interface Message {
