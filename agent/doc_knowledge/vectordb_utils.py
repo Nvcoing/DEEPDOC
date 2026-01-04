@@ -114,3 +114,18 @@ class QdrantFileUploader:
     def check_file_uploaded(self, file_name: str):
         collection_name = f"doc_{file_name}"
         return self.load_collection(collection_name)
+    def delete_collection(self, name: str) -> bool:
+        """
+        name: file_name (vd: abc.pdf) HOẶC collection_name (vd: doc_abc.pdf)
+        """
+        # Nếu chưa có prefix thì coi là file_name
+        collection_name = name if name.startswith("doc_") else f"doc_{name}"
+
+        try:
+            self.client.get_collection(collection_name)
+            self.client.delete_collection(collection_name)
+            print(f"Đã xóa collection '{collection_name}'")
+            return True
+        except Exception as e:
+            print(f"Không thể xóa collection '{collection_name}': {e}")
+            return False

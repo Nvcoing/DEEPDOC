@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { ChevronLeft, Upload, MessageSquare, ChevronDown, Loader2, CheckCircle2, FileText, Presentation, Folder, Check, ChevronRight, Sparkles, User as UserIcon, Bot } from 'lucide-react';
+import { ChevronLeft, Loader2, FileText, Presentation, Folder, ChevronRight, Sparkles, User as UserIcon, Bot, Square, CheckSquare, Plus } from 'lucide-react';
 import { ChatSession, Folder as FolderType, Document, ResearchMode } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,7 +12,7 @@ interface ChatViewProps {
   researchMode: ResearchMode;
   setResearchMode: (mode: ResearchMode) => void;
   onBack: () => void;
-  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onFileUpload: (e: React.ChangeEvent<HTMLInputElement>, targetFolderId?: string) => void;
   onSendMessage: (e: React.FormEvent) => void;
   inputValue: string;
   setInputValue: (v: string) => void;
@@ -20,20 +20,24 @@ interface ChatViewProps {
   isUploading: boolean;
   fileInputRef: React.RefObject<HTMLInputElement>;
   folders: FolderType[];
+  personalFolder?: FolderType;
   onToggleFolderInChat: (folderId: string) => void;
   selectedFolderIds: string[];
   sessionDocs: Document[];
   selectedDocIds: string[];
   onToggleDoc: (id: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
 }
 
 const ChatView: React.FC<ChatViewProps> = ({
-  t, activeSession, researchMode, setResearchMode, onBack, onFileUpload, onSendMessage, inputValue, setInputValue, isLoading, isUploading, fileInputRef, folders, onToggleFolderInChat, selectedFolderIds, sessionDocs, selectedDocIds, onToggleDoc
+  t, activeSession, onBack, onFileUpload, inputValue, setInputValue, isUploading, folders, personalFolder, sessionDocs, selectedDocIds, onToggleDoc
 }) => {
-  const [isFolderMenuOpen, setIsFolderMenuOpen] = useState(false);
   const [isAiThinking, setIsAiThinking] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [streamingContent, setStreamingContent] = useState<string>("");
+  const specificFileInputRef = useRef<HTMLInputElement>(null);
+  const [activeUploadFolderId, setActiveUploadFolderId] = useState<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -50,7 +54,6 @@ const ChatView: React.FC<ChatViewProps> = ({
     const userQuestion = inputValue;
     setInputValue('');
     
-    // 1. Thêm tin nhắn user
     const userMsg = { 
       id: Date.now().toString(), 
       role: 'user' as const, 
@@ -63,26 +66,18 @@ const ChatView: React.FC<ChatViewProps> = ({
     setStreamingContent("");
 
     try {
-      // Lấy tên các file đang được chọn
-      const selectedFileNames = sessionDocs
-        .filter(d => selectedDocIds.includes(d.id))
-        .map(d => d.name);
+      const selectedFiles = sessionDocs.filter(d => selectedDocIds.includes(d.id));
+      const contextFileNames = selectedFiles.map(d => d.name);
 
-      // Nếu không chọn file nào, mặc định dùng tất cả file trong phiên
-      const contextFiles = selectedFileNames.length > 0 
-        ? selectedFileNames 
-        : sessionDocs.map(d => d.name);
-
-      const stream = generateAnswerFromBackend(userQuestion, contextFiles);
+      const stream = generateAnswerFromBackend(userQuestion, contextFileNames);
       
       let fullContent = "";
       for await (const chunk of stream) {
-        setIsAiThinking(false); // Khi bắt đầu nhận stream thì tắt trạng thái "đang nghĩ"
+        setIsAiThinking(false);
         fullContent += chunk;
         setStreamingContent(fullContent);
       }
 
-      // 2. Thêm tin nhắn AI hoàn chỉnh sau khi stream xong
       const aiMsg = { 
         id: (Date.now() + 1).toString(), 
         role: 'assistant' as const, 
@@ -90,182 +85,202 @@ const ChatView: React.FC<ChatViewProps> = ({
         timestamp: new Date().toISOString() 
       };
       activeSession.messages.push(aiMsg);
-      setStreamingContent("");
 
     } catch (err) {
-      const errorMsg = { 
+      activeSession.messages.push({ 
         id: (Date.now() + 1).toString(), 
         role: 'assistant' as const, 
-        content: "Hệ thống gặp sự cố kết nối: " + (err as Error).message, 
+        content: "Lỗi kết nối AI: " + (err as Error).message, 
         timestamp: new Date().toISOString() 
-      };
-      activeSession.messages.push(errorMsg);
+      });
     } finally {
       setIsAiThinking(false);
       setStreamingContent("");
     }
   };
 
-  return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden relative">
-      <header className="h-14 flex-shrink-0 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl z-20">
-        <div className="flex items-center gap-4 min-w-0 flex-1">
-          <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all">
-            <ChevronLeft className="w-5 h-5 dark:text-white" />
-          </button>
-          
-          <div className="flex flex-col min-w-0">
-             <h2 className="font-black text-xs tracking-tight dark:text-white truncate uppercase italic">{activeSession.title}</h2>
-             <div className="relative">
-                <button 
-                  onClick={() => setIsFolderMenuOpen(!isFolderMenuOpen)}
-                  className="flex items-center gap-1.5 mt-0.5 group"
-                >
-                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500 transition-colors">{t.selectFolderChat}</span>
-                  <div className="bg-indigo-50 dark:bg-indigo-900/30 px-2 py-0.5 rounded-md flex items-center gap-1">
-                    <span className="text-[9px] font-bold text-indigo-600">
-                      {selectedFolderIds.length === 0 ? t.allFolders : `${selectedFolderIds.length} ${t.folderMgmt}`}
-                    </span>
-                    <ChevronDown className={`w-2.5 h-2.5 text-indigo-400 transition-transform ${isFolderMenuOpen ? 'rotate-180' : ''}`} />
-                  </div>
-                </button>
+  const handleFolderToggle = (folderId: string) => {
+    const folderDocs = sessionDocs.filter(d => d.folderId === folderId && d.status === 'approved');
+    const folderDocIds = folderDocs.map(d => d.id);
+    const isAllSelected = folderDocIds.length > 0 && folderDocIds.every(id => selectedDocIds.includes(id));
+    
+    if (isAllSelected) {
+      folderDocIds.forEach(id => {
+        if (selectedDocIds.includes(id)) onToggleDoc(id);
+      });
+    } else {
+      folderDocs.forEach(d => {
+        if (!selectedDocIds.includes(d.id)) onToggleDoc(d.id);
+      });
+    }
+  };
 
-                {isFolderMenuOpen && (
-                  <>
-                    <div className="fixed inset-0 z-30" onClick={() => setIsFolderMenuOpen(false)} />
-                    <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-2 z-40 animate-in fade-in slide-in-from-top-2">
-                       <div className="max-h-64 overflow-y-auto space-y-1 p-1 scrollbar-hide">
-                          {folders.map(folder => (
-                            <button 
-                              key={folder.id}
-                              onClick={() => onToggleFolderInChat(folder.id)}
-                              className={`w-full flex items-center justify-between p-2.5 rounded-xl transition-all ${selectedFolderIds.includes(folder.id) ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
-                            >
-                              <div className="flex items-center gap-2 overflow-hidden">
-                                <Folder className={`w-3.5 h-3.5 flex-shrink-0 ${selectedFolderIds.includes(folder.id) ? 'text-indigo-500' : 'text-slate-400'}`} />
-                                <span className="text-[11px] font-bold truncate">{folder.name}</span>
-                              </div>
-                              {selectedFolderIds.includes(folder.id) && <Check className="w-3 h-3" />}
-                            </button>
-                          ))}
-                       </div>
-                    </div>
-                  </>
-                )}
-             </div>
+  const triggerSpecificUpload = (fid: string) => {
+    setActiveUploadFolderId(fid);
+    specificFileInputRef.current?.click();
+  };
+
+  const allVisibleFolders = personalFolder ? [personalFolder, ...folders] : folders;
+
+  return (
+    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 overflow-hidden relative transition-colors duration-300">
+      <input 
+        type="file" 
+        ref={specificFileInputRef} 
+        className="hidden" 
+        multiple 
+        onChange={(e) => {
+          if (activeUploadFolderId) {
+            onFileUpload(e, activeUploadFolderId);
+            setActiveUploadFolderId(null);
+          }
+        }} 
+      />
+      
+      <header className="h-14 flex-shrink-0 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-20 shadow-sm">
+        <div className="flex items-center gap-4">
+          <button onClick={onBack} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all group">
+            <ChevronLeft className="w-5 h-5 dark:text-white text-slate-600 group-hover:-translate-x-0.5 transition-transform" />
+          </button>
+          <div className="flex flex-col">
+             <h2 className="font-black text-[11px] tracking-tight dark:text-white text-slate-800 truncate uppercase italic">{activeSession.title}</h2>
+             <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest italic">{t.brandName} Portal</span>
           </div>
         </div>
         
-        <button 
-          onClick={() => fileInputRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-all shadow-md active:scale-95"
-        >
-          <Upload className="w-3.5 h-3.5" />
-          <span className="text-[10px] font-black uppercase tracking-wider hidden sm:inline">{t.uploadFile}</span>
-          <input type="file" ref={fileInputRef} className="hidden" multiple onChange={onFileUpload} />
-        </button>
+        {isUploading && (
+          <div className="flex items-center gap-2 px-3 py-1 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg animate-pulse border border-indigo-100 dark:border-indigo-800">
+            <Loader2 className="w-3 h-3 text-indigo-500 animate-spin" />
+            <span className="text-[9px] font-black text-indigo-600 dark:text-indigo-400 uppercase">Synchronizing...</span>
+          </div>
+        )}
       </header>
 
       <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        <aside className="hidden md:flex w-72 border-r border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/30 overflow-y-auto p-5 flex-col space-y-4 flex-shrink-0 scrollbar-hide">
-           <div className="flex items-center justify-between px-2 mb-2">
-             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{t.focusedDocs}</h3>
-             <span className="px-2 py-0.5 bg-slate-200 dark:bg-slate-800 text-[9px] font-black rounded-full">{sessionDocs.length}</span>
-           </div>
-           
-           {isUploading && (
-             <div className="flex flex-col gap-3 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100 dark:border-indigo-800">
-               <div className="flex items-center gap-2">
-                 <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                 <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">Đang tải tệp...</span>
-               </div>
-               <div className="w-full h-1 bg-indigo-100 dark:bg-indigo-800 rounded-full overflow-hidden">
-                 <div className="h-full bg-indigo-500 animate-shimmer bg-[length:200%_100%] shimmer-bg" />
-               </div>
-             </div>
-           )}
+        {/* Sidebar tối giản: Chỉ hiển thị thư mục */}
+        <aside className="hidden md:flex w-72 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto p-4 flex-col flex-shrink-0 scrollbar-hide">
+           <div className="space-y-4 flex-1">
+             {allVisibleFolders.map(folder => {
+               // Chỉ hiển thị tệp nằm trong thư mục này
+               const folderDocs = sessionDocs.filter(d => d.folderId === folder.id && d.status === 'approved');
+               const isPersonal = folder.id.startsWith('personal-');
+               const isAllSelected = folderDocs.length > 0 && folderDocs.every(d => selectedDocIds.includes(d.id));
+               
+               return (
+                 <div key={folder.id} className={`space-y-3 p-3 rounded-2xl border transition-all duration-300 ${isPersonal ? 'bg-green-50/20 dark:bg-green-900/10 border-green-100 dark:border-green-900/30' : 'bg-slate-50/50 dark:bg-slate-800/40 border-slate-100 dark:border-slate-800/60 shadow-sm'}`}>
+                   <div className="flex items-center justify-between group">
+                     <div 
+                        className="flex items-center gap-2.5 cursor-pointer flex-1 min-w-0"
+                        onClick={() => handleFolderToggle(folder.id)}
+                      >
+                       <div className="flex items-center justify-center">
+                         {isAllSelected ? 
+                           <CheckSquare className={`w-4 h-4 ${isPersonal ? 'text-green-600' : 'text-indigo-600'}`} /> : 
+                           <Square className="w-4 h-4 text-slate-300 dark:text-slate-600" />
+                         }
+                       </div>
+                       <div className="flex items-center gap-2 min-w-0">
+                         <Folder className={`w-3.5 h-3.5 flex-shrink-0 ${isPersonal ? 'text-green-500 fill-current' : 'text-indigo-500 fill-current'}`} />
+                         <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase truncate">
+                           {folder.name}
+                         </span>
+                       </div>
+                     </div>
+                     <button 
+                       onClick={() => triggerSpecificUpload(folder.id)}
+                       className={`p-1.5 rounded-lg transition-all ${isPersonal ? 'bg-green-100 dark:bg-green-900/40 text-green-600 hover:bg-green-200 dark:hover:bg-green-800/60' : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 hover:bg-indigo-200 dark:hover:bg-indigo-800/60'}`}
+                       title="Tải tệp lên thư mục này"
+                     >
+                       <Plus className="w-3.5 h-3.5" />
+                     </button>
+                   </div>
+                   
+                   <div className="space-y-1 ml-6">
+                     {folderDocs.map(doc => (
+                       <div 
+                         key={doc.id}
+                         onClick={() => onToggleDoc(doc.id)}
+                         className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer transition-all ${selectedDocIds.includes(doc.id) ? 'bg-white dark:bg-slate-800 shadow-sm opacity-100 ring-1 ring-slate-100 dark:ring-slate-700' : 'hover:bg-white dark:hover:bg-slate-800 opacity-60'}`}
+                       >
+                         {selectedDocIds.includes(doc.id) ? 
+                           <CheckSquare className={`w-3.5 h-3.5 ${isPersonal ? 'text-green-500' : 'text-indigo-500'}`} /> : 
+                           <Square className="w-3.5 h-3.5 text-slate-300 dark:text-slate-600" />
+                         }
+                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${doc.type === 'pptx' ? 'bg-orange-50 dark:bg-orange-900/30 text-orange-600' : 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600'}`}>
+                           {doc.type === 'pptx' ? <Presentation className="w-3 h-3" /> : <FileText className="w-3 h-3" />}
+                         </div>
+                         <p className="text-[10px] font-bold dark:text-white text-slate-700 truncate flex-1">{doc.name}</p>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               );
+             })}
 
-           <div className="space-y-2 flex-1">
-             {sessionDocs.length > 0 ? sessionDocs.map(doc => (
-               <div 
-                 key={doc.id} 
-                 onClick={() => onToggleDoc(doc.id)}
-                 className={`flex items-center gap-4 p-3.5 rounded-2xl border transition-all cursor-pointer ${selectedDocIds.includes(doc.id) ? 'bg-white dark:bg-slate-800 border-indigo-500 shadow-xl ring-1 ring-indigo-500/20' : 'bg-transparent border-transparent hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-               >
-                 <div className={`w-10 h-10 flex-shrink-0 rounded-xl flex items-center justify-center ${doc.type === 'pptx' ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                   {doc.type === 'pptx' ? <Presentation className="w-5 h-5" /> : <FileText className="w-5 h-5" />}
-                 </div>
-                 <div className="flex-1 min-w-0">
-                   <p className="text-[11px] font-black truncate dark:text-white uppercase leading-tight">{doc.name}</p>
-                   <p className="text-[8px] text-slate-400 font-bold tracking-tighter mt-1 uppercase">{doc.type}</p>
-                 </div>
-                 {selectedDocIds.includes(doc.id) && <CheckCircle2 className="w-4 h-4 text-indigo-500" />}
-               </div>
-             )) : !isUploading && (
-               <div className="flex flex-col items-center justify-center py-20 opacity-30 px-6">
-                  <div className="w-14 h-14 bg-slate-200 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-                    <MessageSquare className="w-7 h-7 text-slate-400" />
-                  </div>
-                  <p className="text-[9px] text-slate-500 font-black uppercase text-center leading-relaxed">{t.selectToChat}</p>
+             {allVisibleFolders.length === 0 && (
+               <div className="flex flex-col items-center justify-center py-24 text-center px-4 opacity-40">
+                  <Folder className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-4" />
+                  <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Không tìm thấy thư mục</p>
                </div>
              )}
            </div>
         </aside>
 
-        <div className="flex-1 flex flex-col relative overflow-hidden bg-white dark:bg-slate-950">
-          <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-10 scrollbar-hide pb-40">
+        {/* Nội dung Chat */}
+        <div className="flex-1 flex flex-col relative overflow-hidden bg-white dark:bg-slate-950 transition-colors duration-300">
+          <div className="flex-1 overflow-y-auto p-6 md:p-10 space-y-12 scrollbar-hide pb-44">
             {activeSession.messages.length === 0 && (
-              <div className="h-full flex flex-col items-center justify-center text-center max-w-sm mx-auto animate-in fade-in duration-1000">
-                <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-blue-700 rounded-[2.5rem] flex items-center justify-center shadow-2xl mb-8 transform hover:scale-105 transition-transform duration-500">
-                  <Sparkles className="w-12 h-12 text-white" />
+              <div className="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto animate-in fade-in duration-1000">
+                <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-[2rem] flex items-center justify-center shadow-2xl mb-10 transform hover:scale-110 transition-transform duration-500 group">
+                  <Sparkles className="w-10 h-10 text-white group-hover:rotate-12 transition-transform" />
                 </div>
-                <h3 className="text-3xl font-black tracking-tighter dark:text-white uppercase mb-3 italic">{t.brandName} AI</h3>
-                <p className="text-slate-500 dark:text-slate-400 text-[11px] font-bold leading-relaxed px-6 italic">{t.slogan}</p>
+                <h3 className="text-4xl font-black tracking-tighter dark:text-white text-slate-900 uppercase mb-4 italic transition-colors">{t.brandName} Intelligence</h3>
+                <div className="space-y-6">
+                  <p className="text-slate-500 dark:text-slate-400 text-xs font-bold leading-relaxed px-10 italic transition-colors">{t.slogan}</p>
+                  <div className="h-0.5 w-12 bg-indigo-500 mx-auto rounded-full" />
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest transition-colors">Sẵn sàng phân tích tri thức từ thư mục bạn chọn</p>
+                </div>
               </div>
             )}
             
-            <div className="max-w-3xl mx-auto space-y-12">
+            <div className="max-w-3xl mx-auto space-y-14">
               {activeSession.messages.map(m => (
-                <div key={m.id} className={`flex gap-5 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'} animate-in slide-in-from-bottom-4 duration-500`}>
-                  <div className={`w-11 h-11 flex-shrink-0 rounded-[1.2rem] flex items-center justify-center shadow-lg ${m.role === 'user' ? 'bg-gradient-to-br from-indigo-500 to-blue-600' : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'}`}>
-                    {m.role === 'user' ? <UserIcon className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
+                <div key={m.id} className={`flex gap-6 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'} animate-in slide-in-from-bottom-6 duration-500`}>
+                  <div className={`w-12 h-12 flex-shrink-0 rounded-2xl flex items-center justify-center shadow-md transition-all ${m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 shadow-slate-100 dark:shadow-none'}`}>
+                    {m.role === 'user' ? <UserIcon className="w-5.5 h-5.5" /> : <Bot className="w-5.5 h-5.5 text-indigo-600 dark:text-indigo-400" />}
                   </div>
-                  <div className={`group relative max-w-[82%] px-7 py-6 rounded-[2.5rem] shadow-sm text-sm leading-relaxed ${m.role === 'user' ? 'bg-indigo-600 text-white font-medium shadow-indigo-100 dark:shadow-none' : 'bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 dark:text-slate-200'}`}>
-                    <div className="prose dark:prose-invert">
+                  <div className={`group relative max-w-[85%] px-8 py-7 rounded-[2.8rem] shadow-sm text-[15px] leading-relaxed transition-colors ${m.role === 'user' ? 'bg-indigo-600 text-white font-medium' : 'bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 dark:text-slate-200 text-slate-800'}`}>
+                    <div className="prose dark:prose-invert transition-colors">
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                     </div>
-                    <span className={`absolute top-full mt-2 text-[8px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity ${m.role === 'user' ? 'right-6 text-indigo-400' : 'left-6 text-slate-400'}`}>
-                      {m.timestamp ? new Date(m.timestamp).toLocaleTimeString() : ''}
-                    </span>
                   </div>
                 </div>
               ))}
               
-              {/* Hiển thị Streaming Content */}
               {streamingContent && (
-                <div className="flex gap-5 animate-in fade-in duration-300">
-                  <div className="w-11 h-11 flex-shrink-0 rounded-[1.2rem] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg">
-                    <Bot className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <div className="flex gap-6 animate-in fade-in duration-300">
+                  <div className="w-12 h-12 flex-shrink-0 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center shadow-md">
+                    <Bot className="w-5.5 h-5.5 text-indigo-600 dark:text-indigo-400" />
                   </div>
-                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-7 py-6 rounded-[2.5rem] shadow-sm w-full prose dark:prose-invert">
+                  <div className="bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-8 py-7 rounded-[2.8rem] shadow-sm w-full prose dark:prose-invert transition-colors">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                   </div>
                 </div>
               )}
 
               {isAiThinking && (
-                <div className="flex gap-5 animate-in fade-in duration-300">
-                  <div className="w-11 h-11 flex-shrink-0 rounded-[1.2rem] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-lg">
-                    <Bot className="w-5 h-5 text-indigo-500 animate-bounce-subtle" />
+                <div className="flex gap-6 animate-in fade-in duration-300">
+                  <div className="w-12 h-12 flex-shrink-0 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center shadow-md">
+                    <Bot className="w-5.5 h-5.5 text-indigo-500 animate-bounce-subtle" />
                   </div>
-                  <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-8 py-7 rounded-[2.5rem] shadow-sm w-full max-w-sm">
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                         <div className="w-3 h-3 bg-indigo-500 rounded-full shadow-[0_0_12px_rgba(99,102,241,0.6)] animate-pulse" />
-                         <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] italic animate-pulse-slow">Đang truy xuất tri thức...</span>
+                  <div className="bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-10 py-8 rounded-[2.8rem] shadow-sm w-full max-w-sm transition-colors">
+                    <div className="space-y-5">
+                      <div className="flex items-center gap-4">
+                         <div className="w-3.5 h-3.5 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.6)] animate-pulse" />
+                         <span className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.25em] italic animate-pulse">Processing...</span>
                       </div>
-                      <div className="h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-indigo-500 animate-shimmer bg-[length:200%_100%] shimmer-bg" />
+                      <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden transition-colors">
+                        <div className="h-full bg-indigo-500 animate-shimmer bg-[length:200%_100%] shimmer-bg shadow-indigo-500/20 shadow-lg" />
                       </div>
                     </div>
                   </div>
@@ -275,25 +290,26 @@ const ChatView: React.FC<ChatViewProps> = ({
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 p-8 md:p-10 bg-gradient-to-t from-white dark:from-slate-950 via-white/95 dark:via-slate-950/95 to-transparent z-30">
+          {/* Ô nhập liệu */}
+          <div className="absolute bottom-0 left-0 right-0 p-8 md:p-12 bg-gradient-to-t from-white dark:from-slate-950 via-white/95 dark:via-slate-950/95 to-transparent z-30 transition-all">
             <form onSubmit={handleChat} className="max-w-3xl mx-auto relative group">
               <input 
                 type="text" 
                 value={inputValue} 
                 onChange={e => setInputValue(e.target.value)} 
                 placeholder={t.searchPlaceholder} 
-                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[3rem] py-6 pl-10 pr-24 shadow-2xl focus:border-indigo-500 focus:ring-8 focus:ring-indigo-500/5 outline-none transition-all text-[16px] font-bold dark:text-white" 
+                className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[4rem] py-7.5 pl-14 pr-32 shadow-2xl focus:border-indigo-500 focus:ring-[14px] focus:ring-indigo-500/5 outline-none transition-all text-lg font-bold dark:text-white text-slate-800 shadow-slate-200/50 dark:shadow-none" 
               />
               <button 
                 type="submit" 
                 disabled={!inputValue.trim() || isAiThinking || streamingContent !== ""} 
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-indigo-600 text-white p-5 rounded-full hover:bg-indigo-700 shadow-xl shadow-indigo-200 dark:shadow-none transition-all disabled:opacity-40 active:scale-90 flex items-center justify-center h-[58px] w-[58px]"
+                className="absolute right-5 top-1/2 -translate-y-1/2 bg-indigo-600 text-white p-6 rounded-full hover:bg-indigo-700 shadow-xl transition-all disabled:opacity-30 active:scale-90 flex items-center justify-center h-[66px] w-[66px]"
               >
-                <ChevronRight className="w-8 h-8" />
+                <ChevronRight className="w-9 h-9" />
               </button>
             </form>
-            <p className="text-center text-[8px] text-slate-400 font-black uppercase tracking-[0.3em] mt-6 opacity-60">
-              AI Chuyên Sâu • Đọc Hiểu Đa Tầng • Trí Tuệ DocuMind
+            <p className="text-center text-[8px] text-slate-400 dark:text-slate-500 font-black uppercase tracking-[0.5em] mt-10 opacity-60 transition-colors">
+              Knowledge Hub Intelligence • v2.5
             </p>
           </div>
         </div>

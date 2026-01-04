@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { ShieldCheck, CheckCircle, XCircle, Users, FileText, Lock, Building2, UserPlus, FolderEdit, Save, Trash2, LayoutGrid, ChevronRight, UserCircle, Plus, X, FolderPlus, Upload, ChevronLeft, UserMinus, Folder as FolderIcon, Loader2 } from 'lucide-react';
 import { Document, User, DocStatus, Department, Folder as FolderType } from '../types';
-import { uploadFileToBackend } from '../apiService';
+import { uploadFileToBackend, deleteFilePermanently } from '../apiService';
 
 interface AdminPanelProps {
   t: any;
@@ -59,22 +59,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setNewDeptName(''); setIsAddingDept(false);
   };
 
-  // Fix: Added handleAddUserToDept to add users to departments
+  const handleDeleteDept = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (window.confirm("Xóa phòng ban này sẽ gỡ liên kết của toàn bộ nhân sự và tài liệu liên quan. Bạn chắc chắn?")) {
+      setDepartments(departments.filter(d => d.id !== id));
+      if (selectedDeptId === id) setSelectedDeptId(null);
+    }
+  };
+
   const handleAddUserToDept = (userId: string) => {
     if (!selectedDeptId) return;
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, departmentId: selectedDeptId } : u));
   };
 
-  // Fix: Added handleRemoveUserFromDept to remove users from departments
   const handleRemoveUserFromDept = (userId: string) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, departmentId: undefined } : u));
-  };
-
-  const handleAddUserGlobal = () => {
-    if (!newUser.name || !newUser.email || !newUser.password) return;
-    setUsers([...users, { ...newUser, id: `u-${Date.now()}`, allowedDocIds: [], departmentId: newUser.departmentId || undefined }]);
-    setNewUser({ name: '', email: '', password: '', role: 'user', departmentId: '' });
-    setIsAddingUserGlobal(false);
   };
 
   const handleCreateDeptFolder = (e: React.FormEvent) => {
@@ -93,40 +92,74 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setIsCreatingFolder(false);
   };
 
+  const handleDeleteSubFolder = (id: string) => {
+    if (window.confirm("Xóa thư mục này và tất cả nội dung bên trong?")) {
+      setFolders(folders.filter(f => f.id !== id && f.parentId !== id));
+    }
+  };
+
+  const handleDeleteDocAdmin = async (doc: Document) => {
+    if (window.confirm(`Xóa vĩnh viễn tệp ${doc.name}?`)) {
+      try {
+        await deleteFilePermanently(doc.name);
+        setDocuments(allDocs.filter(d => d.id !== doc.id));
+      } catch (err) {
+        alert("Lỗi khi xóa tệp trên hệ thống.");
+      }
+    }
+  };
+
   const handleDeptFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || !selectedDeptId) return;
     
     setIsUploading(true);
-    const fileList = Array.from(files);
+    // Fixed: Cast fileList to File[] to avoid 'unknown' type issues in the loop
+    const fileList = Array.from(files) as File[];
     
     try {
       const uploadedDocs: Document[] = [];
       for (const file of fileList) {
-        // Gọi API upload thực tế
         const response = await uploadFileToBackend(file, selectedSubFolderId || undefined, selectedDeptId);
         
         const newDoc: Document = {
-          id: response.id || `d-${Date.now()}-${Math.random()}`, 
+          id: `d-${Date.now()}-${Math.random()}`, 
           userId: 'admin', 
           name: file.name, 
           type: (file.name.split('.').pop() as any) || 'txt',
           uploadDate: new Date().toLocaleDateString(), 
           size: file.size, 
-          content: "Tài liệu đã được phân tích...", 
+          content: "Tài liệu phòng ban.", 
           status: 'approved', 
           departmentId: selectedDeptId,
           folderId: selectedSubFolderId || undefined,
-          fileData: response.url || URL.createObjectURL(file) // Lưu URL để preview
+          fileData: URL.createObjectURL(file)
         };
         uploadedDocs.push(newDoc);
       }
-      setDocuments(prev => [...prev, ...uploadedDocs]);
+      setDocuments([...allDocs, ...uploadedDocs]);
     } catch (err) {
       alert("Lỗi tải lên: " + (err as Error).message);
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Fix: Added handleAddUserGlobal function to fix the error on line 365
+  const handleAddUserGlobal = () => {
+    if (!newUser.name.trim() || !newUser.email.trim() || !newUser.password.trim()) return;
+    const userToAdd: User = {
+      id: `u-${Date.now()}`,
+      name: newUser.name,
+      email: newUser.email,
+      password: newUser.password,
+      role: newUser.role,
+      departmentId: newUser.departmentId || undefined,
+      allowedDocIds: []
+    };
+    setUsers([...users, userToAdd]);
+    setNewUser({ name: '', email: '', password: '', role: 'user', departmentId: '' });
+    setIsAddingUserGlobal(false);
   };
 
   const handleNavigateBack = () => {
@@ -194,7 +227,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {departments.map(dept => (
                 <div key={dept.id} onClick={() => { setSelectedDeptId(dept.id); setSelectedSubFolderId(null); }} className="group bg-white dark:bg-slate-900 border border-slate-100 p-8 rounded-[2.5rem] flex flex-col gap-6 hover:border-indigo-400 hover:shadow-2xl cursor-pointer relative overflow-hidden">
-                  <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100"><ChevronRight className="w-6 h-6 text-indigo-500" /></div>
+                  <div className="absolute top-0 right-0 p-4 opacity-0 group-hover:opacity-100 flex gap-2">
+                    <button onClick={(e) => handleDeleteDept(e, dept.id)} className="p-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-colors"><Trash2 className="w-4 h-4" /></button>
+                    <ChevronRight className="w-6 h-6 text-indigo-500 self-center" />
+                  </div>
                   <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-2xl flex items-center justify-center"><Building2 className="w-8 h-8" /></div>
                   <div><h4 className="font-black text-xl dark:text-white uppercase italic">{dept.name}</h4></div>
                 </div>
@@ -224,10 +260,10 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                  <div className="flex-1 space-y-6">
                     <div className="flex items-center justify-between"><h3 className="font-black text-xl flex items-center gap-2 dark:text-white"><Users className="w-6 h-6 text-indigo-500" /> Thành viên ({deptUsers.length})</h3><button onClick={() => setShowAddUserToDept(!showAddUserToDept)} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">{showAddUserToDept ? <X className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}</button></div>
                     {showAddUserToDept && (
-                      <div className="bg-white border border-indigo-200 p-4 rounded-2xl shadow-xl space-y-2">
+                      <div className="bg-white dark:bg-slate-800 border border-indigo-200 p-4 rounded-2xl shadow-xl space-y-2">
                         {usersNotInDept.map(u => (
                           <button key={u.id} onClick={() => handleAddUserToDept(u.id)} className="w-full flex items-center justify-between p-3 hover:bg-indigo-50 rounded-xl transition-all group">
-                            <span className="text-sm font-bold">{u.name}</span><Plus className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
+                            <span className="text-sm font-bold dark:text-white">{u.name}</span><Plus className="w-4 h-4 text-indigo-400 group-hover:text-indigo-600" />
                           </button>
                         ))}
                       </div>
@@ -292,27 +328,30 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                      {currentLevelFolders.map(folder => (
                         <div 
                           key={folder.id} 
-                          onClick={() => setSelectedSubFolderId(folder.id)}
-                          className="group bg-white dark:bg-slate-900 border-2 border-slate-50 dark:border-slate-800 p-5 rounded-[2rem] flex items-center gap-4 shadow-sm hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer"
+                          className="group bg-white dark:bg-slate-900 border-2 border-slate-50 dark:border-slate-800 p-5 rounded-[2rem] flex items-center gap-4 shadow-sm hover:border-indigo-400 hover:shadow-md transition-all cursor-pointer relative"
                         >
-                           <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-xl flex items-center justify-center">
-                              <FolderIcon className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                           <div onClick={() => setSelectedSubFolderId(folder.id)} className="flex items-center gap-4 flex-1 overflow-hidden">
+                              <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-500 rounded-xl flex items-center justify-center">
+                                 <FolderIcon className="w-6 h-6 fill-current group-hover:scale-110 transition-transform" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                 <p className="font-bold text-sm truncate dark:text-white uppercase">{folder.name}</p>
+                                 <p className="text-[9px] font-black uppercase text-slate-400">Thư mục con</p>
+                              </div>
                            </div>
-                           <div className="flex-1 min-w-0">
-                              <p className="font-bold text-sm truncate dark:text-white uppercase">{folder.name}</p>
-                              <p className="text-[9px] font-black uppercase text-slate-400">Thư mục con</p>
-                           </div>
+                           <button onClick={() => handleDeleteSubFolder(folder.id)} className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-500 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                            <ChevronRight className="w-4 h-4 text-slate-300" />
                         </div>
                      ))}
 
                      {currentLevelDocs.map(doc => (
-                       <div key={doc.id} className="bg-white dark:bg-slate-900 border border-slate-100 p-5 rounded-[2rem] flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
-                          <div className="w-12 h-12 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center"><FileText className="w-6 h-6" /></div>
+                       <div key={doc.id} className="group bg-white dark:bg-slate-900 border border-slate-100 p-5 rounded-[2rem] flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow relative">
+                          <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-xl flex items-center justify-center"><FileText className="w-6 h-6" /></div>
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-sm truncate dark:text-white">{doc.name}</p>
                             <p className="text-[9px] font-black uppercase text-slate-400">{doc.type} • {doc.uploadDate}</p>
                           </div>
+                          <button onClick={() => handleDeleteDocAdmin(doc)} className="p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-500 rounded-lg transition-all"><Trash2 className="w-4 h-4" /></button>
                        </div>
                      ))}
 

@@ -12,7 +12,7 @@ import FoldersView from './components/FoldersView';
 import HistoryView from './components/HistoryView';
 import ProfileView from './components/ProfileView';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
-import { uploadFilesToBackend, deleteFilePermanently } from './apiService';
+import { uploadFilesToBackend, deleteFilePermanently, uploadFileToBackend } from './apiService';
 
 const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Admin Cao Vũ', email: 'caovu9523@gmail.com', password: '09052003', role: 'admin', allowedDocIds: [] },
@@ -51,6 +51,8 @@ const App: React.FC = () => {
   });
 
   const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
+  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (currentUser) {
@@ -61,19 +63,12 @@ const App: React.FC = () => {
     }
   }, [currentUser?.id]);
 
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(`dm_chat_sessions_${currentUser.id}`, JSON.stringify(chatSessions));
-    }
-  }, [chatSessions, currentUser?.id]);
-
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('documind-theme') as Theme) || 'auto');
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('documind-lang') as Language) || 'Vietnamese');
   const [view, setView] = useState<ViewType>('dashboard');
   
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -102,27 +97,34 @@ const App: React.FC = () => {
       setFolders(prev => {
         if (prev.some(f => f.id === personalFolderId)) return prev;
         return [...prev, {
-          id: personalFolderId, name: t.personalFolder, parentId: null, userId: currentUser.id, status: 'approved', isSystem: true
+          id: personalFolderId, name: currentUser.name, parentId: null, userId: currentUser.id, status: 'approved', isSystem: true
         }];
       });
     }
-  }, [currentUser, personalFolderId, t.personalFolder]);
+  }, [currentUser, personalFolderId]);
 
   const visibleFolders = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'admin') return folders;
+    if (currentUser.role === 'admin') {
+      return folders.filter(f => f.userId === currentUser.id || !f.id.startsWith('personal-'));
+    }
     return folders.filter(f => f.userId === currentUser.id || (currentUser.departmentId && f.departmentId === currentUser.departmentId));
   }, [folders, currentUser]);
 
   const accessibleDocs = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'admin') return documents;
+    if (currentUser.role === 'admin') {
+      return documents.filter(doc => {
+        const isPersonalOther = doc.folderId?.startsWith('personal-') && doc.userId !== currentUser.id;
+        if (isPersonalOther) return false;
+        return true;
+      });
+    }
     const visibleFolderIds = visibleFolders.map(f => f.id);
     return documents.filter(doc => 
       (doc.userId === currentUser.id) || 
       (doc.folderId && visibleFolderIds.includes(doc.folderId) && doc.status === 'approved') ||
-      (currentUser.departmentId && doc.departmentId === currentUser.departmentId && doc.status === 'approved') ||
-      (currentUser.allowedDocIds?.includes(doc.id) && doc.status === 'approved')
+      (currentUser.departmentId && doc.departmentId === currentUser.departmentId && doc.status === 'approved')
     );
   }, [documents, currentUser, visibleFolders]);
 
@@ -131,19 +133,25 @@ const App: React.FC = () => {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, forCurrentSession = false) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetFid?: string) => {
     const files = e.target.files;
     if (!files || !currentUser || files.length === 0) return;
     setIsUploading(true);
     
     try {
-      const result = await uploadFilesToBackend(Array.from(files));
-      
+      const fileList = Array.from(files) as File[];
       const newDocs: Document[] = [];
-      const targetFolderId = view === 'folders' ? currentFolderId : personalFolderId;
+      
+      // Xác định thư mục đích
+      const targetFolderId = targetFid || (view === 'folders' ? currentFolderId : personalFolderId);
+      const targetFolder = folders.find(f => f.id === targetFolderId);
+      
+      // LOGIC MỚI: Tự động duyệt cho thư mục cá nhân hoặc admin tải lên
       const isAutoApprove = currentUser.role === 'admin' || targetFolderId === personalFolderId;
 
-      Array.from(files).forEach((file: any) => {
+      for (const file of fileList) {
+        await uploadFileToBackend(file, targetFolderId || undefined, targetFolder?.departmentId);
+        
         const type = file.name.split('.').pop()?.toLowerCase() as any;
         const newDoc: Document = {
           id: `d-${Date.now()}-${Math.random()}`, 
@@ -152,25 +160,27 @@ const App: React.FC = () => {
           type: type || 'txt', 
           uploadDate: new Date().toLocaleDateString(), 
           size: file.size, 
-          content: "Tài liệu đã được tải lên và sẵn sàng phân tích.", 
+          content: "Tài liệu tải lên.", 
           status: isAutoApprove ? 'approved' : 'pending', 
           isDeleted: false, 
           folderId: targetFolderId || undefined,
-          fileData: URL.createObjectURL(file)
+          departmentId: targetFolder?.departmentId, 
+          fileData: URL.createObjectURL(file) 
         };
         newDocs.push(newDoc);
         setActivities(prev => [...prev, { id: `act-${Date.now()}`, type: 'upload', name: file.name, timestamp: new Date().toISOString() }]);
-      });
+      }
 
       setDocuments(prev => [...prev, ...newDocs]);
       
-      if (forCurrentSession && activeSession) {
-        setChatSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, selectedDocIds: [...s.selectedDocIds, ...newDocs.map(d => d.id)] } : s));
+      // Nếu đang trong Chat, tự động chọn các file vừa tải lên nếu chúng được duyệt ngay
+      if (view === 'chat' && isAutoApprove) {
+        const newDocIds = newDocs.map(d => d.id);
+        setSelectedDocIds(prev => Array.from(new Set([...prev, ...newDocIds])));
       }
-      
-      showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên hệ thống, chờ xét duyệt tri thức.");
+
+      showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên, chờ Admin duyệt.");
     } catch (err) {
-      console.error(err);
       showToast("Tải lên thất bại!", "error");
     } finally {
       setIsUploading(false);
@@ -181,10 +191,9 @@ const App: React.FC = () => {
   const handleFileDelete = async (id: string) => {
     const doc = documents.find(d => d.id === id);
     if (!doc) return;
-
     try {
-      if (doc.isDeleted) {
-        if (window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn ${doc.name}?`)) {
+      if (doc.isDeleted || currentUser.role === 'admin') {
+        if (window.confirm(`Xóa vĩnh viễn tệp ${doc.name}?`)) {
           await deleteFilePermanently(doc.name);
           setDocuments(prev => prev.filter(d => d.id !== id));
           showToast("Đã xóa vĩnh viễn.");
@@ -207,7 +216,21 @@ const App: React.FC = () => {
     setChatSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newId);
     setSelectedDocIds(selectedIds);
+    setSelectedFolderIds([]);
     setView('chat');
+  };
+
+  const handleToggleFolderInChat = (fid: string) => {
+    const isAlreadySelected = selectedFolderIds.includes(fid);
+    const folderDocIds = documents.filter(d => d.folderId === fid && d.status === 'approved').map(d => d.id);
+    
+    if (isAlreadySelected) {
+      setSelectedFolderIds(prev => prev.filter(id => id !== fid));
+      setSelectedDocIds(prev => prev.filter(id => !folderDocIds.includes(id)));
+    } else {
+      setSelectedFolderIds(prev => [...prev, fid]);
+      setSelectedDocIds(prev => Array.from(new Set([...prev, ...folderDocIds])));
+    }
   };
 
   if (!currentUser) return <Login users={users} onLogin={(user) => { setCurrentUser(user); setView('dashboard'); }} t={t} />;
@@ -231,7 +254,7 @@ const App: React.FC = () => {
               <Dashboard 
                 t={t} chatSessions={chatSessions} documents={accessibleDocs} onCreateSession={() => createNewSession(t.startNew)} 
                 onOpenSession={(id) => { setActiveSessionId(id); setView('chat'); }} onFileAction={(d) => createNewSession(d.name, [d.id])}
-                onFileUpload={(e) => handleFileUpload(e, false)} onPreview={setPreviewDoc} onDelete={handleFileDelete}
+                onFileUpload={(e) => handleFileUpload(e)} onPreview={setPreviewDoc} onDelete={handleFileDelete}
                 viewMode={view === 'trash' ? 'trash' : 'all'} trendingNews={[]} isNewsLoading={false} onNewsAction={() => {}}
               />
             </div>
@@ -258,7 +281,7 @@ const App: React.FC = () => {
               <FoldersView 
                 t={t} folders={visibleFolders} documents={accessibleDocs} currentFolderId={currentFolderId} onNavigate={setCurrentFolderId} 
                 onCreateFolder={(name) => setFolders(prev => [...prev, { id: `f-${Date.now()}`, name, parentId: currentFolderId, userId: currentUser.id, status: 'approved' }])} 
-                onUpload={(e) => handleFileUpload(e, false)} onFilePreview={setPreviewDoc} onDeleteFolder={(id) => setFolders(prev => prev.filter(f => f.id !== id))} 
+                onUpload={(e) => handleFileUpload(e)} onFilePreview={setPreviewDoc} onDeleteFolder={(id) => setFolders(prev => prev.filter(f => f.id !== id))} 
                 onChatWithFolder={(fid) => { createNewSession(folders.find(f => f.id === fid)?.name || "", documents.filter(d => d.folderId === fid && d.status === 'approved').map(d => d.id)); }}
                 isAdmin={currentUser.role === 'admin'}
               />
@@ -266,12 +289,23 @@ const App: React.FC = () => {
           ) : activeSession && (
             <ChatView 
               t={t} activeSession={activeSession} researchMode={researchMode} setResearchMode={setResearchMode} onBack={() => setView('dashboard')} 
-              onFileUpload={(e) => handleFileUpload(e, true)} onSendMessage={() => {}} 
+              onFileUpload={handleFileUpload} onSendMessage={() => {}} 
               inputValue={inputValue} setInputValue={setInputValue} 
-              isLoading={isLoading} isUploading={isUploading} fileInputRef={fileInputRef} folders={visibleFolders} 
-              onToggleFolderInChat={() => {}} selectedFolderIds={[]}
-              sessionDocs={accessibleDocs.filter(d => activeSession.selectedDocIds.includes(d.id))} 
-              selectedDocIds={selectedDocIds} onToggleDoc={(id) => setSelectedDocIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+              isLoading={isLoading} isUploading={isUploading} fileInputRef={fileInputRef} 
+              folders={visibleFolders.filter(f => !f.isSystem)}
+              personalFolder={visibleFolders.find(f => f.id === personalFolderId)}
+              onToggleFolderInChat={handleToggleFolderInChat} 
+              selectedFolderIds={selectedFolderIds}
+              sessionDocs={accessibleDocs} 
+              selectedDocIds={selectedDocIds} 
+              onToggleDoc={(id) => setSelectedDocIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])}
+              onSelectAll={() => {
+                const allDocIds = accessibleDocs.map(d => d.id);
+                setSelectedDocIds(allDocIds);
+                const allFolderIds = visibleFolders.filter(f => !f.isSystem).map(f => f.id);
+                setSelectedFolderIds(allFolderIds);
+              }}
+              onDeselectAll={() => { setSelectedDocIds([]); setSelectedFolderIds([]); }}
             />
           )}
         </div>

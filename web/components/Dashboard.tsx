@@ -1,18 +1,18 @@
 
-import React, { useState } from 'react';
-import { Sparkles, ChevronRight, History, MessageSquare, Presentation, FileText, Eye, FolderIcon, Search, Download, Trash2, RotateCcw, Clock, CheckCircle, XCircle, Layout } from 'lucide-react';
-import { ChatSession, NewsArticle, Document } from '../types';
-import { downloadFile, deleteFilePermanently } from '../apiService';
+import React from 'react';
+import { Sparkles, ChevronRight, History, MessageSquare, Presentation, FileText, Eye, FolderIcon, Download, Trash2, RotateCcw, Clock, CheckCircle, XCircle, Layout } from 'lucide-react';
+import { ChatSession, Document } from '../types';
+import { downloadFile } from '../apiService';
 
 interface DashboardProps {
   t: any;
   chatSessions: ChatSession[];
-  trendingNews: NewsArticle[];
+  trendingNews?: any[];
   documents: Document[];
-  isNewsLoading: boolean;
+  isNewsLoading?: boolean;
   onCreateSession: () => void;
   onOpenSession: (id: string) => void;
-  onNewsAction: (news: NewsArticle) => void;
+  onNewsAction?: (news: any) => void;
   onFileAction: (doc: Document) => void;
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPreview: (doc: Document) => void;
@@ -23,22 +23,10 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({
   t, chatSessions, documents, onCreateSession, onOpenSession, onFileAction, onFileUpload, onPreview, onDelete, viewMode = 'all'
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
-
   const filteredDocs = documents.filter(doc => {
-    const matchesSearch = doc.name.toLowerCase().includes(searchQuery.toLowerCase());
-    if (viewMode === 'trash') return doc.isDeleted && matchesSearch;
-    return !doc.isDeleted && matchesSearch;
+    if (viewMode === 'trash') return doc.isDeleted;
+    return !doc.isDeleted;
   });
-
-  const handleDelete = async (doc: Document) => {
-    if (window.confirm(`${t.delete} ${doc.name}?`)) {
-      if (viewMode === 'trash') {
-        await deleteFilePermanently(doc.name);
-      }
-      onDelete?.(doc.id);
-    }
-  };
 
   const getStatusIcon = (status: string) => {
     switch(status) {
@@ -55,18 +43,9 @@ const Dashboard: React.FC<DashboardProps> = ({
           <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-600 rounded-full text-[9px] font-black uppercase tracking-widest">
             <Layout className="w-3 h-3" /> {t.portalName}
           </div>
-          <h2 className="text-4xl font-black tracking-tighter dark:text-white mt-2">{viewMode === 'trash' ? t.trash : t.welcome}</h2>
-          
-          <div className="relative mt-6 max-w-md">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input 
-              type="text" 
-              placeholder={t.searchPlaceholder}
-              className="w-full pl-11 pr-4 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 outline-none transition-all dark:text-white shadow-sm font-medium"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+          <h2 className="text-4xl font-black tracking-tighter dark:text-white mt-2 italic uppercase">
+            {viewMode === 'trash' ? t.trash : t.welcome}
+          </h2>
         </div>
         {viewMode === 'all' && (
           <button onClick={onCreateSession} className="flex items-center gap-2 px-6 py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm shadow-xl shadow-indigo-100 dark:shadow-none hover:scale-105 transition-all">
@@ -87,7 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                   <MessageSquare className="w-5 h-5 text-purple-500 group-hover:scale-110 transition-transform" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="font-bold text-sm dark:text-white block truncate">{session.title}</span>
+                  <span className="font-bold text-sm dark:text-white block truncate uppercase">{session.title}</span>
                   <span className="text-[10px] text-slate-400 font-bold">{new Date(session.lastUpdated).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -135,7 +114,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <RotateCcw className="w-5 h-5" />
                     </button>
                   ) : (
-                    <button onClick={() => handleDelete(doc)} title={t.delete} className="p-2 hover:bg-red-50 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-colors">
+                    <button onClick={() => onDelete?.(doc.id)} title={t.delete} className="p-2 hover:bg-red-50 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-colors">
                       <Trash2 className="w-5 h-5" />
                     </button>
                   )}

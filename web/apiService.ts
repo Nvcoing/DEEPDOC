@@ -1,7 +1,6 @@
 
 import { Language } from "./types";
 
-// Sử dụng biến môi trường hoặc fallback về localhost
 const BACKEND_URL = "http://localhost:8000";
 
 /** 
@@ -24,11 +23,9 @@ export async function uploadFilesToBackend(files: File[]) {
 
 /** 
  * Tải một tài liệu lên Backend với thông tin bổ sung (thư mục, phòng ban)
- * Được sử dụng bởi AdminPanel để tải tài liệu vào các phòng ban hoặc thư mục cụ thể.
  */
 export async function uploadFileToBackend(file: File, folderId?: string, departmentId?: string) {
   const formData = new FormData();
-  // Backend mong đợi trường 'files' là một danh sách các tệp tin
   formData.append('files', file);
   if (folderId) formData.append('folder_id', folderId);
   if (departmentId) formData.append('department_id', departmentId);
@@ -46,16 +43,14 @@ export async function uploadFileToBackend(file: File, folderId?: string, departm
  * Tải xuống tài liệu từ FastAPI
  */
 export function downloadFile(fileName: string) {
-  // Theo code backend: GET /files/{file_name}
   const url = `${BACKEND_URL}/files/${encodeURIComponent(fileName)}`;
   window.open(url, '_blank');
 }
 
 /** 
- * Xóa tài liệu vật lý từ hệ thống
+ * Xóa tài liệu vật lý từ hệ thống theo API cung cấp
  */
 export async function deleteFilePermanently(fileName: string) {
-  // Theo code backend: DELETE /files/{file_name}
   const response = await fetch(`${BACKEND_URL}/files/${encodeURIComponent(fileName)}`, {
     method: 'DELETE'
   });
