@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { X, Presentation, FileText, Table, FileBox, ExternalLink, Download } from 'lucide-react';
+import { X, Presentation, FileText, FileBox, ExternalLink, Download } from 'lucide-react';
 import { Document } from '../types';
 import mammoth from 'mammoth';
-import { downloadFile } from '../apiService';
+import { downloadFile, BACKEND_URL } from '../apiService';
 
 interface PreviewModalProps {
   t: any;
@@ -13,13 +13,15 @@ interface PreviewModalProps {
 
 const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
   const [docxHtml, setDocxHtml] = useState<string>('');
+  const [txtContent, setTxtContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
-  const BACKEND_URL = "http://localhost:8000";
+
+  const fileUrl = `${BACKEND_URL}/files/${encodeURIComponent(doc.name)}`;
+  const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
 
   useEffect(() => {
     setLoading(true);
     if (doc.type === 'docx' && doc.fileData) {
-      // Mammoth xử lý docx từ blob/url
       fetch(doc.fileData)
         .then(r => r.arrayBuffer())
         .then(ab => mammoth.convertToHtml({ arrayBuffer: ab }))
@@ -31,10 +33,25 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
           console.error("Docx Error", err);
           setLoading(false);
         });
+    } else if (doc.type === 'txt') {
+      // Tải nội dung thực tế từ Backend
+      fetch(fileUrl)
+        .then(r => r.text())
+        .then(text => {
+          // Xử lý "gọi" BACKEND_URL: Thay thế chuỗi 'BACKEND_URL' trong tệp bằng biến thực tế
+          const processed = text.replace(/BACKEND_URL/g, BACKEND_URL);
+          setTxtContent(processed);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error("Txt fetch error", err);
+          setTxtContent(doc.content || "Lỗi khi tải nội dung từ backend.");
+          setLoading(false);
+        });
     } else {
       setLoading(false);
     }
-  }, [doc]);
+  }, [doc, fileUrl]);
 
   const getIcon = () => {
     switch (doc.type) {
@@ -45,11 +62,6 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
       default: return <FileBox className="w-5 h-5" />;
     }
   };
-
-  // Tạo link preview qua Google Docs Viewer (Yêu cầu file phải truy cập được từ internet hoặc dùng localhost nếu dev)
-  // Đối với môi trường nội bộ, ta dùng iframe trực tiếp trỏ vào backend cho PDF
-  const fileUrl = `${BACKEND_URL}/files/${encodeURIComponent(doc.name)}`;
-  const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-xl p-4 md:p-8 animate-in fade-in zoom-in-95 duration-300">
@@ -93,7 +105,7 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
                 <iframe src={googleViewerUrl} className="w-full h-full border-none" title="Office Preview" />
               ) : doc.type === 'txt' ? (
                 <div className="p-10 font-mono text-sm whitespace-pre-wrap leading-relaxed dark:text-slate-300 h-full w-full overflow-y-auto bg-white dark:bg-slate-900">
-                  {doc.content}
+                  {txtContent}
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-6 opacity-40">

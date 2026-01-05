@@ -1,7 +1,27 @@
 
 import { Language } from "./types";
 
-const BACKEND_URL = "http://localhost:8000";
+// Khởi tạo URL mặc định
+export let BACKEND_URL = "http://localhost:8000";
+
+// Tự động tải cấu hình từ file bên ngoài nếu có
+const loadConfig = async () => {
+  try {
+    const response = await fetch('/api.txt');
+    if (response.ok) {
+      const url = await response.text();
+      if (url && url.trim().startsWith('http')) {
+        BACKEND_URL = url.trim();
+        console.log("Backend URL updated from api.txt:", BACKEND_URL);
+      }
+    }
+  } catch (error) {
+    console.warn("Could not load api.txt, using default backend URL.");
+  }
+};
+
+// Thực thi việc tải config ngay khi module được load
+loadConfig();
 
 /** 
  * Tải tài liệu lên Backend
