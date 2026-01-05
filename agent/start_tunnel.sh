@@ -5,7 +5,7 @@
 set -e
 
 LOCAL_URL="http://127.0.0.1:8000"
-OUTPUT_FILE="public_api"
+OUTPUT_FILE="../web/api"
 
 echo "🚀 Khởi động Cloudflare Tunnel cho $LOCAL_URL ..."
 
