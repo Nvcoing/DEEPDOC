@@ -47,7 +47,10 @@ def delete_file_and_collection(file_name: str):
     file_path = os.path.join(UPLOAD_DIR, file_name)
     os.remove(file_path)
     QdrantFileUploader().delete_collection(file_name)
-
+    
+def get_media_type(file_name: str):
+    media_type, _ = mimetypes.guess_type(file_name)
+    return media_type or "application/octet-stream"
 # ================== API ==================
 @app.post("/generate")
 def generate(req: GenerateRequest):
@@ -101,7 +104,7 @@ async def delete_file(file_name: str):
         "message": "Deleted successfully",
         "file": file_name
     }
-    
+
 @app.get("/files/preview/{file_name}")
 def preview_file(file_name: str):
     file_path = os.path.join(UPLOAD_DIR, file_name)
