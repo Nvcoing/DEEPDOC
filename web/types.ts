@@ -44,7 +44,7 @@ export interface Document {
   id: string;
   userId: string;
   name: string;
-  type: 'pdf' | 'docx' | 'pptx' | 'txt' | 'doc';
+  type: 'pdf' | 'docx' | 'pptx' | 'txt' | 'doc' | 'xlsx';
   uploadDate: string;
   size: number;
   content: string; 

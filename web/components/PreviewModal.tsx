@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { X, Presentation, FileText, FileBox, ExternalLink, Download } from 'lucide-react';
+import { X, Presentation, FileText, FileBox, ExternalLink, Download, FileSpreadsheet } from 'lucide-react';
 import { Document } from '../types';
 import mammoth from 'mammoth';
-import { downloadFile, BACKEND_URL } from '../apiService';
+import { downloadFile, getPreviewUrl, BACKEND_URL } from '../apiService';
 
 interface PreviewModalProps {
   t: any;
@@ -16,13 +16,18 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
   const [txtContent, setTxtContent] = useState<string>('');
   const [loading, setLoading] = useState(true);
 
-  const fileUrl = `${BACKEND_URL}/files/${encodeURIComponent(doc.name)}`;
-  const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(fileUrl)}&embedded=true`;
+  // Sử dụng endpoint preview mới từ API Service
+  const previewUrl = getPreviewUrl(doc.name);
+  
+  // Google Viewer chỉ hoạt động nếu backend có địa chỉ public IP/Domain. 
+  // Đối với localhost, nó sẽ báo lỗi, nhưng chúng ta vẫn giữ làm fallback.
+  const googleViewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(previewUrl)}&embedded=true`;
 
   useEffect(() => {
     setLoading(true);
-    if (doc.type === 'docx' && doc.fileData) {
-      fetch(doc.fileData)
+    if (doc.type === 'docx') {
+      // Tải tệp từ API preview để mammoth xử lý
+      fetch(previewUrl)
         .then(r => r.arrayBuffer())
         .then(ab => mammoth.convertToHtml({ arrayBuffer: ab }))
         .then(res => {
@@ -34,13 +39,10 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
           setLoading(false);
         });
     } else if (doc.type === 'txt') {
-      // Tải nội dung thực tế từ Backend
-      fetch(fileUrl)
+      fetch(previewUrl)
         .then(r => r.text())
         .then(text => {
-          // Xử lý "gọi" BACKEND_URL: Thay thế chuỗi 'BACKEND_URL' trong tệp bằng biến thực tế
-          const processed = text.replace(/BACKEND_URL/g, BACKEND_URL);
-          setTxtContent(processed);
+          setTxtContent(text);
           setLoading(false);
         })
         .catch(err => {
@@ -51,11 +53,12 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
     } else {
       setLoading(false);
     }
-  }, [doc, fileUrl]);
+  }, [doc, previewUrl]);
 
   const getIcon = () => {
     switch (doc.type) {
       case 'pptx': return <Presentation className="w-5 h-5" />;
+      case 'xlsx': return <FileSpreadsheet className="w-5 h-5" />;
       case 'docx':
       case 'doc': return <FileText className="w-5 h-5" />;
       case 'txt': return <FileText className="w-5 h-5" />;
@@ -96,13 +99,15 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
           ) : (
             <>
               {doc.type === 'pdf' ? (
-                <iframe src={`${fileUrl}#toolbar=0`} className="w-full h-full border-none" title="PDF Preview" />
+                <iframe src={`${previewUrl}#toolbar=0`} className="w-full h-full border-none" title="PDF Preview" />
               ) : doc.type === 'docx' ? (
                 <div className="w-full h-full overflow-y-auto p-8 md:p-16 bg-white dark:bg-slate-900">
                   <div className="max-w-3xl mx-auto prose dark:prose-invert" dangerouslySetInnerHTML={{ __html: docxHtml }} />
                 </div>
-              ) : (doc.type === 'pptx' || doc.type === 'doc') ? (
-                <iframe src={googleViewerUrl} className="w-full h-full border-none" title="Office Preview" />
+              ) : (doc.type === 'pptx' || doc.type === 'xlsx' || doc.type === 'doc') ? (
+                // Đối với Office Files, chúng ta ưu tiên dùng Google Viewer làm proxy. 
+                // Nếu chạy local, nó có thể không hiển thị, nhưng iframe vẫn sẽ gọi đến previewUrl.
+                <iframe src={googleViewerUrl} className="w-full h-full border-none shadow-inner" title="Office Preview" />
               ) : doc.type === 'txt' ? (
                 <div className="p-10 font-mono text-sm whitespace-pre-wrap leading-relaxed dark:text-slate-300 h-full w-full overflow-y-auto bg-white dark:bg-slate-900">
                   {txtContent}
@@ -120,9 +125,15 @@ const PreviewModal: React.FC<PreviewModalProps> = ({ t, doc, onClose }) => {
 
         <footer className="p-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900 px-10">
           <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400 italic">Bảo mật tri thức bởi DocuMind AI</span>
-          <a href={fileUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase hover:underline">
-            <ExternalLink className="w-3 h-3" /> Xem file gốc
-          </a>
+          <div className="flex items-center gap-4">
+             <a href={previewUrl} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-black text-indigo-600 uppercase hover:underline">
+               <ExternalLink className="w-3 h-3" /> Xem qua API Preview
+             </a>
+             <span className="w-1 h-1 bg-slate-300 rounded-full" />
+             <a href={`${BACKEND_URL}/files/${encodeURIComponent(doc.name)}`} target="_blank" rel="noreferrer" className="flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase hover:underline">
+               Tệp gốc
+             </a>
+          </div>
         </footer>
       </div>
     </div>

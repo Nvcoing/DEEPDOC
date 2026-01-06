@@ -44,6 +44,13 @@ export function downloadFile(fileName: string) {
   window.open(url, '_blank');
 }
 
+/**
+ * Lấy URL Preview từ API mới
+ */
+export function getPreviewUrl(fileName: string) {
+  return `${BACKEND_URL}/files/preview/${encodeURIComponent(fileName)}`;
+}
+
 export async function deleteFilePermanently(fileName: string) {
   const response = await fetch(`${BACKEND_URL}/files/${encodeURIComponent(fileName)}`, {
     method: 'DELETE'
