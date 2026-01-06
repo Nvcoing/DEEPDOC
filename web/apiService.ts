@@ -4,46 +4,26 @@ import { Language } from "./types";
 // Khởi tạo URL mặc định
 export let BACKEND_URL = "http://localhost:8000";
 
-// Tự động tải cấu hình từ file bên ngoài nếu có
+// Tự động tải cấu hình từ file bên ngoài
 const loadConfig = async () => {
   try {
     const response = await fetch('/api.txt');
     if (response.ok) {
-      const url = await response.text();
-      if (url && url.trim().startsWith('http')) {
-        BACKEND_URL = url.trim();
-        console.log("Backend URL updated from api.txt:", BACKEND_URL);
+      let url = await response.text();
+      // Loại bỏ hoàn toàn khoảng trắng, xuống dòng và các ký tự không thuộc URL hợp lệ ở cuối
+      url = url.trim().replace(/[^a-zA-Z0-9:/._-]+$/, '').replace(/\/+$/, '');
+      if (url && url.startsWith('http')) {
+        BACKEND_URL = url;
+        console.log("🚀 Backend URL synced:", BACKEND_URL);
       }
     }
   } catch (error) {
-    console.warn("Could not load api.txt, using default backend URL.");
+    console.warn("⚠️ api.txt not found, using default URL.");
   }
 };
 
-// Thực thi việc tải config ngay khi module được load
 loadConfig();
 
-/** 
- * Tải tài liệu lên Backend
- */
-export async function uploadFilesToBackend(files: File[]) {
-  const formData = new FormData();
-  files.forEach(file => {
-    formData.append('files', file);
-  });
-
-  const response = await fetch(`${BACKEND_URL}/files`, {
-    method: 'POST',
-    body: formData
-  });
-
-  if (!response.ok) throw new Error(`Upload failed: ${response.statusText}`);
-  return response.json();
-}
-
-/** 
- * Tải một tài liệu lên Backend với thông tin bổ sung (thư mục, phòng ban)
- */
 export async function uploadFileToBackend(file: File, folderId?: string, departmentId?: string) {
   const formData = new FormData();
   formData.append('files', file);
@@ -59,17 +39,11 @@ export async function uploadFileToBackend(file: File, folderId?: string, departm
   return response.json();
 }
 
-/** 
- * Tải xuống tài liệu từ FastAPI
- */
 export function downloadFile(fileName: string) {
   const url = `${BACKEND_URL}/files/${encodeURIComponent(fileName)}`;
   window.open(url, '_blank');
 }
 
-/** 
- * Xóa tài liệu vật lý từ hệ thống theo API cung cấp
- */
 export async function deleteFilePermanently(fileName: string) {
   const response = await fetch(`${BACKEND_URL}/files/${encodeURIComponent(fileName)}`, {
     method: 'DELETE'
@@ -79,28 +53,40 @@ export async function deleteFilePermanently(fileName: string) {
 }
 
 /**
- * API Chat với cơ chế Streaming từ Backend /generate
+ * Tăng timeout cho API generate (dùng cho streaming)
  */
 export async function* generateAnswerFromBackend(question: string, fileNames: string[]) {
-  const response = await fetch(`${BACKEND_URL}/generate`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ 
-      question: question, 
-      file_names: fileNames
-    })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 phút timeout
 
-  if (!response.ok) throw new Error("Không thể kết nối với trung tâm trí tuệ AI");
+  try {
+    const response = await fetch(`${BACKEND_URL}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        question: question, 
+        file_names: fileNames
+      }),
+      signal: controller.signal
+    });
 
-  const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
+    clearTimeout(timeoutId);
 
-  if (!reader) return;
+    if (!response.ok) throw new Error("Không thể kết nối với trung tâm trí tuệ AI hoặc yêu cầu quá lâu");
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    yield decoder.decode(value);
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) return;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      yield decoder.decode(value);
+    }
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      throw new Error("Yêu cầu đã quá thời gian xử lý (Timeout). Vui lòng thử lại với câu hỏi ngắn hơn.");
+    }
+    throw error;
   }
 }

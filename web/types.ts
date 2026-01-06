@@ -1,10 +1,10 @@
 
 export type Language = 'English' | 'Vietnamese' | 'French' | 'German' | 'Japanese' | 'Korean' | 'Chinese';
 export type Theme = 'light' | 'dark' | 'auto';
-export type ViewType = 'chat' | 'dashboard' | 'folders' | 'trash' | 'admin-panel' | 'history' | 'profile';
+export type ViewType = 'chat' | 'dashboard' | 'folders' | 'admin-panel' | 'history' | 'profile';
 export type ResearchMode = 'new' | 'library';
 export type UserRole = 'admin' | 'user';
-export type DocStatus = 'pending' | 'approved' | 'rejected';
+export type DocStatus = 'pending' | 'approved' | 'rejected' | 'uploading';
 
 export interface ActivityLog {
   id: string;

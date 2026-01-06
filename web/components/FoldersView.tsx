@@ -66,7 +66,7 @@ const FoldersView: React.FC<FoldersViewProps> = ({
             </button>
           )}
           <div>
-            <h2 className="text-3xl font-black tracking-tighter dark:text-white flex items-center gap-2">
+            <h2 className="text-3xl font-black tracking-tighter dark:text-white flex items-center gap-2 italic uppercase">
               <Folder className="w-8 h-8 text-indigo-500" />
               {currentFolder ? currentFolder.name : t.folderMgmt}
             </h2>
@@ -117,34 +117,34 @@ const FoldersView: React.FC<FoldersViewProps> = ({
             autoFocus
             type="text" 
             placeholder={t.folderNamePlaceholder}
-            className="flex-1 bg-transparent border-none outline-none font-bold text-sm dark:text-white"
+            className="flex-1 bg-transparent border-none outline-none font-bold text-sm dark:text-white italic"
             value={newFolderName}
             onChange={(e) => setNewFolderName(e.target.value)}
           />
-          <button type="button" onClick={() => setIsCreating(false)} className="text-xs font-black text-slate-400 uppercase">{t.back}</button>
-          <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-indigo-700 transition-all">OK</button>
+          <button type="button" onClick={() => setIsCreating(false)} className="text-xs font-black text-slate-400 uppercase tracking-widest">{t.back}</button>
+          <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-black shadow-md hover:bg-indigo-700 transition-all">OK</button>
         </form>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {filteredSubFolders.map(folder => (
           <div 
             key={folder.id} 
-            className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl hover:border-indigo-500 hover:shadow-xl transition-all cursor-pointer relative"
+            className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-[2rem] hover:border-indigo-500 hover:shadow-2xl transition-all cursor-pointer relative border-b-4 border-b-slate-100 dark:border-b-slate-950"
           >
-            <div onClick={() => onNavigate(folder.id)} className="space-y-3">
-              <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
-                <Folder className="w-6 h-6 fill-current" />
+            <div onClick={() => onNavigate(folder.id)} className="space-y-4">
+              <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/40 rounded-2xl flex items-center justify-center text-indigo-600 group-hover:scale-110 transition-transform">
+                <Folder className="w-7 h-7 fill-current" />
               </div>
               <div>
-                <h4 className="font-bold text-sm dark:text-white truncate">{folder.name}</h4>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{folder.isSystem ? 'Hệ thống' : 'Thư mục'}</p>
+                <h4 className="font-black text-sm dark:text-white uppercase italic truncate">{folder.name}</h4>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{folder.isSystem ? 'Hệ thống' : 'Thư mục'}</p>
               </div>
             </div>
             {isAdmin && !folder.isSystem && (
               <button 
                 onClick={(e) => { e.stopPropagation(); onDeleteFolder(folder.id); }}
-                className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-400 rounded-lg transition-all"
+                className="absolute top-4 right-4 p-2 opacity-0 group-hover:opacity-100 hover:bg-red-50 text-red-500 rounded-xl transition-all"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -156,16 +156,16 @@ const FoldersView: React.FC<FoldersViewProps> = ({
           <div 
             key={doc.id}
             onClick={() => onFilePreview(doc)}
-            className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl hover:shadow-lg hover:border-indigo-400 transition-all cursor-pointer"
+            className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 rounded-[2rem] hover:shadow-2xl hover:border-indigo-400 transition-all cursor-pointer border-b-4 border-b-slate-100 dark:border-b-slate-950"
           >
-            <div className="space-y-3">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${doc.type === 'pptx' ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'}`}>
-                {doc.type === 'pptx' ? <Presentation className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
+            <div className="space-y-4">
+              <div className={`w-14 h-14 rounded-2xl flex items-center justify-center ${doc.type === 'pptx' ? 'bg-orange-50 text-orange-600' : 'bg-indigo-50 text-indigo-600'}`}>
+                {doc.type === 'pptx' ? <Presentation className="w-7 h-7" /> : <FileText className="w-7 h-7" />}
               </div>
               <div>
-                <h4 className="font-bold text-sm dark:text-white truncate">{doc.name}</h4>
-                <div className="flex items-center gap-2">
-                   <p className="text-[9px] font-black text-slate-400 uppercase">{doc.type}</p>
+                <h4 className="font-black text-sm dark:text-white italic uppercase truncate">{doc.name}</h4>
+                <div className="flex items-center gap-2 mt-1">
+                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{doc.type}</p>
                    <span className={`w-1.5 h-1.5 rounded-full ${doc.status === 'approved' ? 'bg-green-500' : 'bg-orange-400'}`} />
                 </div>
               </div>
@@ -174,11 +174,11 @@ const FoldersView: React.FC<FoldersViewProps> = ({
         ))}
 
         {!hasContent && !isCreating && (
-          <div className="col-span-full py-20 text-center space-y-4">
-            <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto">
-              <Folder className="w-10 h-10 text-slate-300" />
+          <div className="col-span-full py-24 text-center space-y-6">
+            <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto opacity-50">
+              <Folder className="w-12 h-12 text-slate-300" />
             </div>
-            <p className="text-slate-400 font-black uppercase text-xs tracking-widest">{t.emptyFolder}</p>
+            <p className="text-slate-400 font-black uppercase text-xs tracking-[0.3em] italic opacity-60">{t.emptyFolder}</p>
           </div>
         )}
       </div>

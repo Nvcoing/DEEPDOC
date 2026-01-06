@@ -12,7 +12,7 @@ import FoldersView from './components/FoldersView';
 import HistoryView from './components/HistoryView';
 import ProfileView from './components/ProfileView';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
-import { uploadFilesToBackend, deleteFilePermanently, uploadFileToBackend } from './apiService';
+import { deleteFilePermanently, uploadFileToBackend } from './apiService';
 
 const INITIAL_USERS: User[] = [
   { id: 'u1', name: 'Admin Cao Vũ', email: 'caovu9523@gmail.com', password: '09052003', role: 'admin', allowedDocIds: [] },
@@ -37,7 +37,9 @@ const App: React.FC = () => {
   
   const [documents, setDocuments] = useState<Document[]>(() => {
     const saved = localStorage.getItem('dm_docs');
-    return saved ? JSON.parse(saved) : [];
+    const docs = saved ? JSON.parse(saved) : [];
+    // Reset any stuck uploading states on reload
+    return docs.map((d: Document) => d.status === 'uploading' ? { ...d, status: 'pending' } : d);
   });
   
   const [folders, setFolders] = useState<Folder[]>(() => {
@@ -85,7 +87,11 @@ const App: React.FC = () => {
   useEffect(() => { localStorage.setItem('dm_users', JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem('dm_depts', JSON.stringify(departments)); }, [departments]);
   useEffect(() => { localStorage.setItem('dm_folders', JSON.stringify(folders)); }, [folders]);
-  useEffect(() => { localStorage.setItem('dm_docs', JSON.stringify(documents)); }, [documents]);
+  useEffect(() => { 
+    // Don't save files that are still 'uploading' to storage
+    const docsToSave = documents.filter(d => d.status !== 'uploading');
+    localStorage.setItem('dm_docs', JSON.stringify(docsToSave)); 
+  }, [documents]);
   useEffect(() => { localStorage.setItem('dm_activities', JSON.stringify(activities)); }, [activities]);
   useEffect(() => { localStorage.setItem('documind-theme', theme); }, [theme]);
   useEffect(() => { localStorage.setItem('documind-lang', language); }, [language]);
@@ -123,8 +129,8 @@ const App: React.FC = () => {
     const visibleFolderIds = visibleFolders.map(f => f.id);
     return documents.filter(doc => 
       (doc.userId === currentUser.id) || 
-      (doc.folderId && visibleFolderIds.includes(doc.folderId) && doc.status === 'approved') ||
-      (currentUser.departmentId && doc.departmentId === currentUser.departmentId && doc.status === 'approved')
+      (doc.folderId && visibleFolderIds.includes(doc.folderId) && (doc.status === 'approved' || doc.status === 'uploading')) ||
+      (currentUser.departmentId && doc.departmentId === currentUser.departmentId && (doc.status === 'approved' || doc.status === 'uploading'))
     );
   }, [documents, currentUser, visibleFolders]);
 
@@ -138,69 +144,76 @@ const App: React.FC = () => {
     if (!files || !currentUser || files.length === 0) return;
     setIsUploading(true);
     
-    try {
-      const fileList = Array.from(files) as File[];
-      const newDocs: Document[] = [];
-      
-      // Xác định thư mục đích
-      const targetFolderId = targetFid || (view === 'folders' ? currentFolderId : personalFolderId);
-      const targetFolder = folders.find(f => f.id === targetFolderId);
-      
-      // LOGIC MỚI: Tự động duyệt cho thư mục cá nhân hoặc admin tải lên
-      const isAutoApprove = currentUser.role === 'admin' || targetFolderId === personalFolderId;
+    const fileList = Array.from(files) as File[];
+    const targetFolderId = targetFid || (view === 'folders' ? currentFolderId : personalFolderId);
+    const targetFolder = folders.find(f => f.id === targetFolderId);
+    const isAutoApprove = currentUser.role === 'admin' || targetFolderId === personalFolderId;
 
-      for (const file of fileList) {
+    // Optimistic UI: Create temporary documents
+    const tempDocs: Document[] = fileList.map(file => ({
+      id: `temp-${Date.now()}-${Math.random()}`, 
+      userId: currentUser.id, 
+      name: file.name, 
+      type: file.name.split('.').pop()?.toLowerCase() as any || 'txt', 
+      uploadDate: new Date().toLocaleDateString(), 
+      size: file.size, 
+      content: "", 
+      status: 'uploading', 
+      isDeleted: false, 
+      folderId: targetFolderId || undefined,
+      departmentId: targetFolder?.departmentId, 
+      fileData: URL.createObjectURL(file) 
+    }));
+
+    setDocuments(prev => [...prev, ...tempDocs]);
+
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i];
+      const tempId = tempDocs[i].id;
+      
+      try {
         await uploadFileToBackend(file, targetFolderId || undefined, targetFolder?.departmentId);
         
-        const type = file.name.split('.').pop()?.toLowerCase() as any;
-        const newDoc: Document = {
-          id: `d-${Date.now()}-${Math.random()}`, 
-          userId: currentUser.id, 
-          name: file.name, 
-          type: type || 'txt', 
-          uploadDate: new Date().toLocaleDateString(), 
-          size: file.size, 
-          content: "Tài liệu tải lên.", 
-          status: isAutoApprove ? 'approved' : 'pending', 
-          isDeleted: false, 
-          folderId: targetFolderId || undefined,
-          departmentId: targetFolder?.departmentId, 
-          fileData: URL.createObjectURL(file) 
-        };
-        newDocs.push(newDoc);
-        setActivities(prev => [...prev, { id: `act-${Date.now()}`, type: 'upload', name: file.name, timestamp: new Date().toISOString() }]);
-      }
+        // Update document status from 'uploading' to final status
+        setDocuments(prev => prev.map(d => 
+          d.id === tempId ? { ...d, status: isAutoApprove ? 'approved' : 'pending' } : d
+        ));
+        
+        setActivities(prev => [...prev, { 
+          id: `act-${Date.now()}`, type: 'upload', name: file.name, timestamp: new Date().toISOString() 
+        }]);
 
-      setDocuments(prev => [...prev, ...newDocs]);
-      
-      // Nếu đang trong Chat, tự động chọn các file vừa tải lên nếu chúng được duyệt ngay
-      if (view === 'chat' && isAutoApprove) {
-        const newDocIds = newDocs.map(d => d.id);
-        setSelectedDocIds(prev => Array.from(new Set([...prev, ...newDocIds])));
+        if (view === 'chat' && isAutoApprove) {
+          setSelectedDocIds(prev => Array.from(new Set([...prev, tempId])));
+        }
+      } catch (err) {
+        // Remove failed upload from UI
+        setDocuments(prev => prev.filter(d => d.id !== tempId));
+        showToast(`Tải tệp ${file.name} thất bại!`, "error");
       }
-
-      showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên, chờ Admin duyệt.");
-    } catch (err) {
-      showToast("Tải lên thất bại!", "error");
-    } finally {
-      setIsUploading(false);
-      if (e.target) e.target.value = '';
     }
+
+    setIsUploading(false);
+    if (e.target) e.target.value = '';
+    showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên, chờ Admin duyệt.");
   };
 
   const handleFileDelete = async (id: string) => {
     const doc = documents.find(d => d.id === id);
     if (!doc) return;
+    
+    const isPersonal = doc.folderId === personalFolderId;
+    
     try {
-      if (doc.isDeleted || currentUser.role === 'admin') {
+      if (currentUser.role === 'admin' || isPersonal) {
         if (window.confirm(`Xóa vĩnh viễn tệp ${doc.name}?`)) {
           await deleteFilePermanently(doc.name);
           setDocuments(prev => prev.filter(d => d.id !== id));
           showToast("Đã xóa vĩnh viễn.");
         }
       } else {
-        setDocuments(prev => prev.map(d => d.id === id ? {...d, isDeleted: true} : d));
-        showToast("Đã chuyển vào thùng rác.");
+        setDocuments(prev => prev.map(d => d.id === id ? {...d, status: 'pending'} : d));
+        showToast("Yêu cầu xóa đã được gửi tới Admin duyệt.");
       }
     } catch (err) {
       showToast("Lỗi khi xóa tệp.", "error");
@@ -222,7 +235,7 @@ const App: React.FC = () => {
 
   const handleToggleFolderInChat = (fid: string) => {
     const isAlreadySelected = selectedFolderIds.includes(fid);
-    const folderDocIds = documents.filter(d => d.folderId === fid && d.status === 'approved').map(d => d.id);
+    const folderDocIds = documents.filter(d => d.folderId === fid && (d.status === 'approved' || d.status === 'uploading')).map(d => d.id);
     
     if (isAlreadySelected) {
       setSelectedFolderIds(prev => prev.filter(id => id !== fid));
@@ -249,13 +262,13 @@ const App: React.FC = () => {
           </div>
         )}
         <div className="h-full w-full overflow-hidden flex flex-col relative">
-          {view === 'dashboard' || view === 'trash' ? (
+          {view === 'dashboard' ? (
             <div className="flex-1 overflow-y-auto no-scrollbar">
               <Dashboard 
                 t={t} chatSessions={chatSessions} documents={accessibleDocs} onCreateSession={() => createNewSession(t.startNew)} 
                 onOpenSession={(id) => { setActiveSessionId(id); setView('chat'); }} onFileAction={(d) => createNewSession(d.name, [d.id])}
                 onFileUpload={(e) => handleFileUpload(e)} onPreview={setPreviewDoc} onDelete={handleFileDelete}
-                viewMode={view === 'trash' ? 'trash' : 'all'} trendingNews={[]} isNewsLoading={false} onNewsAction={() => {}}
+                trendingNews={[]} isNewsLoading={false} onNewsAction={() => {}}
               />
             </div>
           ) : view === 'history' ? (
@@ -274,6 +287,14 @@ const App: React.FC = () => {
                 users={users} setUsers={setUsers} departments={departments} setDepartments={setDepartments}
                 folders={folders} setFolders={setFolders} allDocs={documents} setDocuments={setDocuments}
                 onAssignPermission={() => {}}
+                onDeletePermanently={async (id) => {
+                  const doc = documents.find(d => d.id === id);
+                  if (doc) {
+                    await deleteFilePermanently(doc.name);
+                    setDocuments(prev => prev.filter(d => d.id !== id));
+                    showToast("Đã xóa vĩnh viễn.");
+                  }
+                }}
               />
             </div>
           ) : view === 'folders' ? (
@@ -282,7 +303,7 @@ const App: React.FC = () => {
                 t={t} folders={visibleFolders} documents={accessibleDocs} currentFolderId={currentFolderId} onNavigate={setCurrentFolderId} 
                 onCreateFolder={(name) => setFolders(prev => [...prev, { id: `f-${Date.now()}`, name, parentId: currentFolderId, userId: currentUser.id, status: 'approved' }])} 
                 onUpload={(e) => handleFileUpload(e)} onFilePreview={setPreviewDoc} onDeleteFolder={(id) => setFolders(prev => prev.filter(f => f.id !== id))} 
-                onChatWithFolder={(fid) => { createNewSession(folders.find(f => f.id === fid)?.name || "", documents.filter(d => d.folderId === fid && d.status === 'approved').map(d => d.id)); }}
+                onChatWithFolder={(fid) => { createNewSession(folders.find(f => f.id === fid)?.name || "", documents.filter(d => d.folderId === fid && (d.status === 'approved' || d.status === 'uploading')).map(d => d.id)); }}
                 isAdmin={currentUser.role === 'admin'}
               />
             </div>

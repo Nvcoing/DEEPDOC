@@ -1,7 +1,7 @@
 
 import React from 'react';
-import { Library, LayoutDashboard, FolderTree, Trash2, Languages, Sun, Moon, Monitor, ShieldCheck, LogOut, Clock, User as UserIcon } from 'lucide-react';
-import { Language, Theme, ViewType, UserRole, User, Department } from '../types';
+import { Library, LayoutDashboard, FolderTree, Languages, Sun, Moon, Monitor, ShieldCheck, LogOut, Clock, User as UserIcon } from 'lucide-react';
+import { Language, Theme, ViewType, User } from '../types';
 
 interface HeaderProps {
   t: any;
@@ -13,11 +13,11 @@ interface HeaderProps {
   setTheme: (t: Theme) => void;
   langCodes: {lang: string, code: string}[];
   user: User | null;
-  departments: Department[];
+  departments: any[];
   onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, user, departments, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, user, onLogout }) => {
   const toggleTheme = () => {
     if (theme === 'light') setTheme('dark');
     else if (theme === 'dark') setTheme('auto');
@@ -31,78 +31,71 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
   };
 
   return (
-    <header className="h-14 flex-shrink-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 flex items-center justify-between z-40">
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setView('dashboard')}>
-          <div className="w-8 h-8 bg-gradient-to-br from-indigo-600 to-blue-700 rounded-lg flex items-center justify-center shadow-lg">
-            <Library className="text-white w-4 h-4" />
+    <header className="h-16 flex-shrink-0 bg-white/90 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 px-6 flex items-center justify-between z-40 shadow-sm">
+      <div className="flex items-center gap-8">
+        <div className="flex items-center gap-3 cursor-pointer group select-none" onClick={() => setView('dashboard')}>
+          <div className="w-9 h-9 bg-gradient-to-tr from-indigo-600 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none transition-transform group-hover:scale-105">
+            <Library className="text-white w-5 h-5" />
           </div>
-          <span className="font-black text-lg tracking-tighter italic dark:text-white">{t.brandName}</span>
+          <span className="font-black text-xl tracking-tight italic dark:text-white leading-none pt-0.5">{t.brandName}</span>
         </div>
         
-        <nav className="hidden sm:flex items-center gap-1">
+        <nav className="hidden md:flex items-center gap-2">
           <button 
             onClick={() => setView('dashboard')} 
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'dashboard' ? 'bg-blue-50 dark:bg-blue-900/40 text-blue-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
           >
-            <LayoutDashboard className="w-3.5 h-3.5" /> {t.home}
+            <LayoutDashboard className="w-4 h-4" /> {t.home}
           </button>
           
           {user?.role === 'admin' && (
             <button 
               onClick={() => setView('admin-panel')} 
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'admin-panel' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'admin-panel' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
-              <ShieldCheck className="w-3.5 h-3.5" /> {t.adminPanel}
+              <ShieldCheck className="w-4 h-4" /> {t.adminPanel}
             </button>
           )}
 
           {user?.role !== 'admin' && (
             <button 
               onClick={() => setView('folders')} 
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'folders' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'folders' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
-              <FolderTree className="w-3.5 h-3.5" /> {t.folderMgmt}
+              <FolderTree className="w-4 h-4" /> {t.folderMgmt}
             </button>
           )}
 
           <button 
             onClick={() => setView('history')} 
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'history' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'history' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
           >
-            <Clock className="w-3.5 h-3.5" /> {t.history}
-          </button>
-          <button 
-            onClick={() => setView('trash')} 
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all font-bold text-xs ${view === 'trash' ? 'bg-red-50 dark:bg-red-900/40 text-red-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-          >
-            <Trash2 className="w-3.5 h-3.5" /> {t.trash}
+            <Clock className="w-4 h-4" /> {t.history}
           </button>
         </nav>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         <button 
           onClick={() => setView('profile')}
-          className={`p-2 rounded-lg border transition-all ${view === 'profile' ? 'bg-blue-50 border-blue-200 text-blue-600' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500'}`}
-          title="Account Info"
+          className={`p-2.5 rounded-xl border transition-all ${view === 'profile' ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100'}`}
         >
-          <UserIcon className="w-4 h-4" />
+          <UserIcon className="w-4.5 h-4.5" />
         </button>
 
         <button 
           onClick={toggleTheme}
-          className="p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+          className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
         >
           {getThemeIcon()}
         </button>
 
-        <div className="flex items-center gap-1 p-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg">
-          <Languages className="w-3.5 h-3.5 text-blue-500 ml-1" />
+        <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+          <Languages className="w-4 h-4 text-indigo-500 ml-1" />
           <select 
             value={language} 
             onChange={(e) => setLanguage(e.target.value as Language)} 
-            className="bg-transparent text-[10px] font-black uppercase cursor-pointer dark:text-white outline-none"
+            className="bg-transparent text-[10px] font-black uppercase cursor-pointer dark:text-white outline-none pr-1"
           >
             {langCodes.map(lc => <option key={lc.lang} value={lc.lang} className="dark:bg-slate-900">{lc.code}</option>)}
           </select>
@@ -110,9 +103,9 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
 
         <button 
           onClick={onLogout} 
-          className="p-2 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-all"
+          className="p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-red-50 hover:text-red-500 text-slate-400 transition-all"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="w-4.5 h-4.5" />
         </button>
       </div>
     </header>
