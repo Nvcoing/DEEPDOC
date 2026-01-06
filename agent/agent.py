@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from typing import List
 import os
 import shutil
+import mimetypes
 
 from llm.generate import generate_stream
 from handler.response import answer
@@ -100,3 +101,20 @@ async def delete_file(file_name: str):
         "message": "Deleted successfully",
         "file": file_name
     }
+    
+@app.get("/files/preview/{file_name}")
+def preview_file(file_name: str):
+    file_path = os.path.join(UPLOAD_DIR, file_name)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    media_type = get_media_type(file_name)
+
+    return FileResponse(
+        path=file_path,
+        media_type=media_type,
+        headers={
+            "Content-Disposition": "inline"
+        }
+    )
