@@ -20,7 +20,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
     setError(null);
     const foundUser = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.password === password && u.role === role);
     if (foundUser) onLogin(foundUser);
-    else setError("Thông tin xác thực không chính xác.");
+    else setError(t.loginError);
   };
 
   return (
@@ -41,10 +41,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
         <form onSubmit={handleLogin} className="space-y-8">
           <div className="flex gap-2 p-1.5 bg-slate-100/50 dark:bg-slate-800/50 rounded-[1.8rem] border border-slate-200/30 dark:border-slate-700/30">
             <button type="button" onClick={() => { setRole('user'); setError(null); }} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.4rem] text-[11px] font-black transition-all uppercase tracking-widest ${role === 'user' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-xl ring-1 ring-slate-100 dark:ring-slate-600' : 'text-slate-500 hover:text-slate-700'}`}>
-              <UserIcon className="w-4 h-4" /> NHÂN VIÊN
+              <UserIcon className="w-4 h-4" /> {t.employee}
             </button>
             <button type="button" onClick={() => { setRole('admin'); setError(null); }} className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-[1.4rem] text-[11px] font-black transition-all uppercase tracking-widest ${role === 'admin' ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-xl ring-1 ring-slate-100 dark:ring-slate-600' : 'text-slate-500 hover:text-slate-700'}`}>
-              <ShieldCheck className="w-4 h-4" /> QUẢN TRỊ
+              <ShieldCheck className="w-4 h-4" /> {t.adminRole}
             </button>
           </div>
 
@@ -56,11 +56,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
             )}
             <div className="relative group">
               <Mail className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
-              <input type="email" placeholder="Email định danh" required className="w-full pl-16 pr-6 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-[1.8rem] text-sm focus:ring-8 focus:ring-indigo-500/5 outline-none dark:text-white font-bold transition-all placeholder:text-slate-300" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input type="email" placeholder={t.emailPlaceholder} required className="w-full pl-16 pr-6 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-[1.8rem] text-sm focus:ring-8 focus:ring-indigo-500/5 outline-none dark:text-white font-bold transition-all placeholder:text-slate-300" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="relative group">
               <Lock className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300 group-focus-within:text-indigo-500 transition-colors" />
-              <input type="password" placeholder="Mật khẩu bảo mật" required className="w-full pl-16 pr-6 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-[1.8rem] text-sm focus:ring-8 focus:ring-indigo-500/5 outline-none dark:text-white font-bold transition-all placeholder:text-slate-300" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <input type="password" placeholder={t.passwordPlaceholder} required className="w-full pl-16 pr-6 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 rounded-[1.8rem] text-sm focus:ring-8 focus:ring-indigo-500/5 outline-none dark:text-white font-bold transition-all placeholder:text-slate-300" value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
           </div>
 
@@ -69,12 +69,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, t, users }) => {
             <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] transition-transform" />
             
             <div className="relative flex items-center justify-center gap-3 uppercase tracking-[0.2em] text-[11px]">
-              VÀO HỆ THỐNG TRÍ TUỆ <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              {t.loginAction} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </div>
           </button>
         </form>
         
-        <p className="text-center text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-[0.5em] mt-12 opacity-60">DocuMind AI Security • v2.6</p>
+        <p className="text-center text-[9px] font-black text-slate-300 dark:text-slate-600 uppercase tracking-[0.5em] mt-12 opacity-60">{t.securityNote} • v2.6</p>
       </div>
     </div>
   );

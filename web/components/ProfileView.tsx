@@ -1,6 +1,5 @@
 
 import React from 'react';
-// Added CheckCircle to imports to fix undefined name error
 import { User as UserIcon, Mail, Shield, Building2, Calendar, FileCheck, LogOut, CheckCircle } from 'lucide-react';
 import { User, Department } from '../types';
 
@@ -21,14 +20,14 @@ const ProfileView: React.FC<ProfileViewProps> = ({ t, user, department }) => {
         <div>
           <h2 className="text-4xl font-black tracking-tighter dark:text-white uppercase italic">{user.name}</h2>
           <div className="mt-3 inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-indigo-100 dark:border-indigo-800">
-            <Shield className="w-3 h-3" /> {user.role === 'admin' ? 'Hệ thống Quản trị' : 'Nhân viên chính thức'}
+            <Shield className="w-3 h-3" /> {user.role === 'admin' ? t.adminRole : t.employee}
           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-[2.5rem] space-y-6">
-          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Thông tin cơ bản</h3>
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">{t.basicInfo}</h3>
           
           <div className="space-y-6">
             <div className="flex items-center gap-4">
@@ -36,7 +35,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ t, user, department }) => {
                 <Mail className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase">Địa chỉ Email</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase">Email</p>
                 <p className="font-bold text-sm dark:text-white">{user.email}</p>
               </div>
             </div>
@@ -46,24 +45,23 @@ const ProfileView: React.FC<ProfileViewProps> = ({ t, user, department }) => {
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[9px] font-black text-slate-400 uppercase">Phòng ban</p>
-                <p className="font-bold text-sm dark:text-white">{department?.name || 'Chưa phân phối'}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase">{t.departments}</p>
+                <p className="font-bold text-sm dark:text-white">{department?.name || t.noDept}</p>
               </div>
             </div>
           </div>
         </div>
 
         <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 p-8 rounded-[2.5rem] space-y-6">
-          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">Quyền hạn hệ thống</h3>
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.3em] mb-4">{t.systemPermissions}</h3>
           
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-transparent hover:border-indigo-200 transition-all">
               <FileCheck className="w-5 h-5 text-indigo-500" />
               <div className="flex-1">
-                <p className="text-[10px] font-black uppercase dark:text-white">Truy cập tri thức</p>
-                <p className="text-[9px] text-slate-400 font-bold mt-0.5">Toàn quyền xem tài liệu phòng ban</p>
+                <p className="text-[10px] font-black uppercase dark:text-white">{t.accessKnowledge}</p>
+                <p className="text-[9px] text-slate-400 font-bold mt-0.5">{t.accessKnowledgeDesc}</p>
               </div>
-              {/* Fix: CheckCircle is now imported */}
               <CheckCircle className="w-4 h-4 text-green-500" />
             </div>
 
@@ -71,10 +69,9 @@ const ProfileView: React.FC<ProfileViewProps> = ({ t, user, department }) => {
               <div className="flex items-center gap-3 p-4 bg-indigo-50 dark:bg-indigo-900/40 rounded-2xl border border-indigo-100 dark:border-indigo-800 transition-all">
                 <Shield className="w-5 h-5 text-indigo-600" />
                 <div className="flex-1">
-                  <p className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400">Bảng điều khiển Admin</p>
-                  <p className="text-[9px] text-indigo-400 font-bold mt-0.5">Quản lý User & Cấu trúc tổ chức</p>
+                  <p className="text-[10px] font-black uppercase text-indigo-700 dark:text-indigo-400">{t.adminPanel}</p>
+                  <p className="text-[9px] text-indigo-400 font-bold mt-0.5">{t.adminDashboardDesc}</p>
                 </div>
-                {/* Fix: CheckCircle is now imported */}
                 <CheckCircle className="w-4 h-4 text-indigo-600" />
               </div>
             )}
@@ -83,7 +80,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({ t, user, department }) => {
       </div>
 
       <div className="flex justify-center pt-10">
-        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic opacity-60">DocuMind Intelligence Hub v2.5 - Tài khoản đã được bảo vệ bởi AI</p>
+        <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest italic opacity-60">{t.protectedByAi}</p>
       </div>
     </div>
   );

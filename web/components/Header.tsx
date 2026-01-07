@@ -19,16 +19,19 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, user, onLogout }) => {
   const toggleTheme = () => {
+    // Xoay vòng: Sáng -> Tối -> Hệ thống
     if (theme === 'light') setTheme('dark');
     else if (theme === 'dark') setTheme('auto');
     else setTheme('light');
   };
 
-  const getThemeIcon = () => {
-    if (theme === 'light') return <Sun className="w-4 h-4 text-orange-500" />;
-    if (theme === 'dark') return <Moon className="w-4 h-4 text-blue-400" />;
-    return <Monitor className="w-4 h-4 text-slate-500" />;
+  const getThemeInfo = () => {
+    if (theme === 'light') return { icon: <Sun className="w-4 h-4 text-orange-500" />, label: t.lightMode };
+    if (theme === 'dark') return { icon: <Moon className="w-4 h-4 text-blue-400" />, label: t.darkMode };
+    return { icon: <Monitor className="w-4 h-4 text-slate-500" />, label: t.systemMode };
   };
+
+  const themeInfo = getThemeInfo();
 
   return (
     <header className="h-16 flex-shrink-0 bg-white/90 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 px-6 flex items-center justify-between z-40 shadow-sm">
@@ -85,9 +88,13 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
 
         <button 
           onClick={toggleTheme}
-          className="p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all"
+          className="flex items-center gap-2 px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-700 transition-all group"
+          title={`${themeInfo.label}`}
         >
-          {getThemeIcon()}
+          <div className="group-hover:rotate-12 transition-transform duration-300">
+            {themeInfo.icon}
+          </div>
+          <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 select-none">{themeInfo.label}</span>
         </button>
 
         <div className="flex items-center gap-2 p-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">

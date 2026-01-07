@@ -38,7 +38,6 @@ const App: React.FC = () => {
   const [documents, setDocuments] = useState<Document[]>(() => {
     const saved = localStorage.getItem('dm_docs');
     const docs = saved ? JSON.parse(saved) : [];
-    // Reset any stuck uploading states on reload
     return docs.map((d: Document) => d.status === 'uploading' ? { ...d, status: 'pending' } : d);
   });
   
@@ -56,17 +55,8 @@ const App: React.FC = () => {
   const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
 
-  useEffect(() => {
-    if (currentUser) {
-      const saved = localStorage.getItem(`dm_chat_sessions_${currentUser.id}`);
-      setChatSessions(saved ? JSON.parse(saved) : []);
-    } else {
-      setChatSessions([]);
-    }
-  }, [currentUser?.id]);
-
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('documind-theme') as Theme) || 'auto');
-  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('documind-lang') as Language) || 'Vietnamese');
+  const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('documind-lang') as Language) || 'English');
   const [view, setView] = useState<ViewType>('dashboard');
   
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
@@ -83,17 +73,52 @@ const App: React.FC = () => {
   const langCodes = useMemo(() => Object.keys(TRANSLATIONS).map(l => ({ lang: l, code: TRANSLATIONS[l as Language].langCode })), []);
   const activeSession = useMemo(() => chatSessions.find(s => s.id === activeSessionId), [chatSessions, activeSessionId]);
 
+  // Logic áp dụng Dark Mode dựa trên cài đặt
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const applyTheme = (currentTheme: Theme) => {
+      // FORCE LIGHT MODE IF NOT LOGGED IN (Auto sáng màn hình login)
+      if (!currentUser) {
+        root.classList.remove('dark');
+        return;
+      }
+
+      if (currentTheme === 'dark' || (currentTheme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        root.classList.add('dark');
+      } else {
+        root.classList.remove('dark');
+      }
+    };
+
+    applyTheme(theme);
+    localStorage.setItem('documind-theme', theme);
+
+    if (theme === 'auto') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const listener = () => applyTheme('auto');
+      mediaQuery.addEventListener('change', listener);
+      return () => mediaQuery.removeEventListener('change', listener);
+    }
+  }, [theme, currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      const saved = localStorage.getItem(`dm_chat_sessions_${currentUser.id}`);
+      setChatSessions(saved ? JSON.parse(saved) : []);
+    } else {
+      setChatSessions([]);
+    }
+  }, [currentUser?.id]);
+
   useEffect(() => { localStorage.setItem('dm_current_user', JSON.stringify(currentUser)); }, [currentUser]);
   useEffect(() => { localStorage.setItem('dm_users', JSON.stringify(users)); }, [users]);
   useEffect(() => { localStorage.setItem('dm_depts', JSON.stringify(departments)); }, [departments]);
   useEffect(() => { localStorage.setItem('dm_folders', JSON.stringify(folders)); }, [folders]);
   useEffect(() => { 
-    // Don't save files that are still 'uploading' to storage
     const docsToSave = documents.filter(d => d.status !== 'uploading');
     localStorage.setItem('dm_docs', JSON.stringify(docsToSave)); 
   }, [documents]);
   useEffect(() => { localStorage.setItem('dm_activities', JSON.stringify(activities)); }, [activities]);
-  useEffect(() => { localStorage.setItem('documind-theme', theme); }, [theme]);
   useEffect(() => { localStorage.setItem('documind-lang', language); }, [language]);
 
   const personalFolderId = useMemo(() => currentUser ? `personal-${currentUser.id}` : null, [currentUser]);
@@ -149,7 +174,6 @@ const App: React.FC = () => {
     const targetFolder = folders.find(f => f.id === targetFolderId);
     const isAutoApprove = currentUser.role === 'admin' || targetFolderId === personalFolderId;
 
-    // Optimistic UI: Create temporary documents
     const tempDocs: Document[] = fileList.map(file => ({
       id: `temp-${Date.now()}-${Math.random()}`, 
       userId: currentUser.id, 
@@ -173,26 +197,20 @@ const App: React.FC = () => {
       
       try {
         await uploadFileToBackend(file, targetFolderId || undefined, targetFolder?.departmentId);
-        
-        // Update document status from 'uploading' to final status
         setDocuments(prev => prev.map(d => 
           d.id === tempId ? { ...d, status: isAutoApprove ? 'approved' : 'pending' } : d
         ));
-        
         setActivities(prev => [...prev, { 
           id: `act-${Date.now()}`, type: 'upload', name: file.name, timestamp: new Date().toISOString() 
         }]);
-
         if (view === 'chat' && isAutoApprove) {
           setSelectedDocIds(prev => Array.from(new Set([...prev, tempId])));
         }
       } catch (err) {
-        // Remove failed upload from UI
         setDocuments(prev => prev.filter(d => d.id !== tempId));
         showToast(`Tải tệp ${file.name} thất bại!`, "error");
       }
     }
-
     setIsUploading(false);
     if (e.target) e.target.value = '';
     showToast(isAutoApprove ? t.uploadSuccess : "Đã tải lên, chờ Admin duyệt.");
@@ -201,12 +219,10 @@ const App: React.FC = () => {
   const handleFileDelete = async (id: string) => {
     const doc = documents.find(d => d.id === id);
     if (!doc) return;
-    
     const isPersonal = doc.folderId === personalFolderId;
-    
     try {
       if (currentUser.role === 'admin' || isPersonal) {
-        if (window.confirm(`Xóa vĩnh viễn tệp ${doc.name}?`)) {
+        if (window.confirm(t.confirmDelete + ` (${doc.name})`)) {
           await deleteFilePermanently(doc.name);
           setDocuments(prev => prev.filter(d => d.id !== id));
           showToast("Đã xóa vĩnh viễn.");
@@ -236,7 +252,6 @@ const App: React.FC = () => {
   const handleToggleFolderInChat = (fid: string) => {
     const isAlreadySelected = selectedFolderIds.includes(fid);
     const folderDocIds = documents.filter(d => d.folderId === fid && (d.status === 'approved' || d.status === 'uploading')).map(d => d.id);
-    
     if (isAlreadySelected) {
       setSelectedFolderIds(prev => prev.filter(id => id !== fid));
       setSelectedDocIds(prev => prev.filter(id => !folderDocIds.includes(id)));

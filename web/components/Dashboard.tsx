@@ -1,7 +1,6 @@
 
 import React from 'react';
 import { ChevronRight, History, MessageSquare, Presentation, FileText, Eye, FolderIcon, Download, Trash2, Clock, CheckCircle, XCircle, Layout, Loader2, Plus } from 'lucide-react';
-// Fix: Added NewsArticle to imports to support new props
 import { ChatSession, Document, NewsArticle } from '../types';
 import { downloadFile } from '../apiService';
 
@@ -15,14 +14,12 @@ interface DashboardProps {
   onFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onPreview: (doc: Document) => void;
   onDelete?: (id: string) => void;
-  // Fix: Added missing props to interface to resolve TS error in App.tsx
   trendingNews: NewsArticle[];
   isNewsLoading: boolean;
   onNewsAction: () => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
-  // Fix: Destructured the added news-related props
   t, chatSessions, documents, onCreateSession, onOpenSession, onFileAction, onFileUpload, onPreview, onDelete,
   trendingNews, isNewsLoading, onNewsAction
 }) => {
@@ -53,7 +50,6 @@ const Dashboard: React.FC<DashboardProps> = ({
           onClick={onCreateSession} 
           className="relative flex items-center gap-4 px-12 py-6 bg-gradient-to-br from-indigo-600 to-blue-700 text-white rounded-[2.5rem] font-black text-xl shadow-2xl shadow-indigo-300 dark:shadow-indigo-950/50 hover:scale-105 hover:shadow-indigo-400 dark:hover:shadow-indigo-900 transition-all active:scale-[0.98] group overflow-hidden"
         >
-          {/* Subtle background shimmer */}
           <div className="absolute inset-0 w-full h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-[shimmer_2s_infinite]" />
           
           <div className="bg-white/20 p-2 rounded-xl group-hover:rotate-90 transition-transform duration-500">
@@ -80,7 +76,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
             )) : <div className="py-20 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[2.5rem] opacity-50">
-                   <p className="text-slate-400 text-xs italic uppercase font-black tracking-widest">Chưa có thảo luận nào</p>
+                   <p className="text-slate-400 text-xs italic uppercase font-black tracking-widest">{t.noDiscussions}</p>
                  </div>}
           </div>
         </section>

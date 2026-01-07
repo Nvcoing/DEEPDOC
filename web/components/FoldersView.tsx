@@ -67,7 +67,7 @@ const FoldersView: React.FC<FoldersViewProps> = ({
           )}
           <div>
             <h2 className="text-3xl font-black tracking-tighter dark:text-white flex items-center gap-2 italic uppercase">
-              <Folder className="w-8 h-8 text-indigo-500" />
+              <Folder className="w-8 h-8 text-indigo-50" />
               {currentFolder ? currentFolder.name : t.folderMgmt}
             </h2>
           </div>
@@ -90,7 +90,7 @@ const FoldersView: React.FC<FoldersViewProps> = ({
               onClick={() => onChatWithFolder(currentFolderId)}
               className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-black text-xs shadow-lg hover:scale-105 transition-all"
             >
-              <Sparkles className="w-4 h-4" /> Hỏi AI về thư mục
+              <Sparkles className="w-4 h-4" /> {t.askAiFolder}
             </button>
           )}
 
@@ -138,7 +138,7 @@ const FoldersView: React.FC<FoldersViewProps> = ({
               </div>
               <div>
                 <h4 className="font-black text-sm dark:text-white uppercase italic truncate">{folder.name}</h4>
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{folder.isSystem ? 'Hệ thống' : 'Thư mục'}</p>
+                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">{folder.isSystem ? t.personalStorage : t.folderMgmt}</p>
               </div>
             </div>
             {isAdmin && !folder.isSystem && (

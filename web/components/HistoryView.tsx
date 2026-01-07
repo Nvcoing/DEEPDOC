@@ -17,7 +17,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ t, activities }) => {
         </div>
         <div>
           <h2 className="text-3xl font-black tracking-tighter dark:text-white">{t.activityTitle}</h2>
-          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Toàn bộ hoạt động gần đây</p>
+          <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">{t.activityLogDesc}</p>
         </div>
       </header>
 
@@ -31,7 +31,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ t, activities }) => {
               <div>
                 <h4 className="font-bold text-sm dark:text-white">{act.name}</h4>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[9px] font-black uppercase text-slate-400">{act.type}</span>
+                  <span className="text-[9px] font-black uppercase text-slate-400">{act.type === 'upload' ? t.uploadDesc : t.newFolder}</span>
                   <span className="w-1 h-1 bg-slate-300 rounded-full" />
                   <span className="text-[10px] text-slate-500">{new Date(act.timestamp).toLocaleString()}</span>
                 </div>
@@ -44,7 +44,7 @@ const HistoryView: React.FC<HistoryViewProps> = ({ t, activities }) => {
             <div className="w-20 h-20 bg-slate-100 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto">
               <Clock className="w-10 h-10 text-slate-300" />
             </div>
-            <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">Chưa có hoạt động nào được ghi lại</p>
+            <p className="text-slate-400 font-black uppercase text-xs tracking-widest italic">{t.noActivities}</p>
           </div>
         )}
       </div>
