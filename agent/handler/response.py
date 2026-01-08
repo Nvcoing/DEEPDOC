@@ -70,8 +70,7 @@ def answer(question: str, file_names: List[str]) -> str:
         file_paths=file_paths,
         query=question,
         chunk_topk=10,
-        page_topk=3,
-        related_topk=0
+        similarity_threshold=0.7
     )
 
     final_prompt = f"""

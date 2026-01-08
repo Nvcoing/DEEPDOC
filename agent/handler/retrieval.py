@@ -9,8 +9,7 @@ def query_document(
     file_paths: List[str],
     query: str,
     chunk_topk: int = 10,
-    page_topk: int = 3,
-    related_topk: int = 2
+    similarity_threshold: float = 0.7
 ) -> SearchResultAccessor:
 
     collections = []
@@ -30,8 +29,7 @@ def query_document(
     searcher = DOCSearcher(
         collections=collections,
         chunk_topk=chunk_topk,
-        page_topk=page_topk,
-        related_topk=related_topk
+        similarity_threshold=similarity_threshold,
     )
 
     results = searcher.search(query)
