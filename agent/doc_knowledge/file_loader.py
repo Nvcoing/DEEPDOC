@@ -34,7 +34,7 @@ def load_file_pages(path: str) -> List[str]:
 
     raise ValueError("Unsupported file")
 
-def chunk_page(text, size=800, overlap=200):
+def chunk_page(text, size=200, overlap=50):
     words = text.split()
     chunks, i = [], 0
     while i < len(words):
