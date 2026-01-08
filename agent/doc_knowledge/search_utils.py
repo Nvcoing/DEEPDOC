@@ -112,7 +112,7 @@ class DOCSearcher:
                     query_filter=Filter(
                         must=[FieldCondition(key="type", match=MatchValue(value="page"))]
                     ),
-                    limit=50,
+                    limit=10,
                     with_payload=True
                 )
 
