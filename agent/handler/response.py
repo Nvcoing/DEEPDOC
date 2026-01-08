@@ -69,7 +69,7 @@ def answer(question: str, file_names: List[str]) -> str:
     acc = query_document(
         file_paths=file_paths,
         query=question,
-        chunk_topk=10,
+        chunk_topk=3,
         similarity_threshold=0.7
     )
 
@@ -96,9 +96,6 @@ def answer(question: str, file_names: List[str]) -> str:
 
     {acc.get_chunk_highlighted(3)}
 
-    {acc.get_chunk_highlighted(4)}
-
-    {acc.get_chunk_highlighted(5)}
     <<<END_DOCUMENT>>>
 
     QUESTION:
