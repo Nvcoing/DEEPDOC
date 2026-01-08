@@ -9,13 +9,13 @@ from doc_knowledge.config import embed_model, rank_model, device, CLIENT
 
 
 class DOCSearcher:
-    def __init__(self, collections: List[str], chunk_topk=10):
+    def __init__(self, collections: List[str], chunk_topk=10, similarity_threshold: float = 0.7):
         self.collections = collections
         self.chunk_topk = chunk_topk
 
         self.page_limit = 10
         self.pre_topk = 30
-        self.chunk_sim_thres = 0.7
+        self.chunk_sim_thres = similarity_threshold
         self.dedup_thres = 0.92
 
     def search(self, query: str):
