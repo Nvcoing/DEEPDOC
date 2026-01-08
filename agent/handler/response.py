@@ -90,15 +90,15 @@ def answer(question: str, file_names: List[str]) -> str:
 
     UPLOADED_DOCUMENT:
     <<<BEGIN_DOCUMENT>>>
-    {acc.get_chunk_highlighted(1, "highlighted_text")}
+    {acc.get_chunk_highlighted(1)}
 
-    {acc.get_chunk_highlighted(2, "highlighted_text")}
+    {acc.get_chunk_highlighted(2)}
 
-    {acc.get_chunk_highlighted(3, "highlighted_text")}
+    {acc.get_chunk_highlighted(3)}
 
-    {acc.get_chunk_highlighted(4, "highlighted_text")}
+    {acc.get_chunk_highlighted(4)}
 
-    {acc.get_chunk_highlighted(5, "highlighted_text")}
+    {acc.get_chunk_highlighted(5)}
     <<<END_DOCUMENT>>>
 
     QUESTION:
