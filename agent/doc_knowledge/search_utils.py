@@ -16,7 +16,7 @@ class DOCSearcher:
         self.page_limit = 10
         self.pre_topk = 30
         self.chunk_sim_thres = similarity_threshold
-        self.dedup_thres = 0.92
+        self.dedup_thres = 0.7
 
     def search(self, query: str):
         with torch.no_grad():
