@@ -6,6 +6,7 @@ from qdrant_client.models import Distance, VectorParams, PointStruct
 
 from doc_knowledge.config import CLIENT, embed_model
 from doc_knowledge.file_loader import load_file_pages, chunk_page
+from doc_knowledge.entities import extract_entities
 
 
 class QdrantFileUploader:
@@ -36,62 +37,77 @@ class QdrantFileUploader:
             )
         )
 
-        # ================= PAGE LEVEL =================
-        with torch.no_grad():
-            page_embs = self.embed_model.encode(
-                pages,
-                normalize_embeddings=True
-            ).tolist()
-
+        # ================= PAGE + CHUNK METADATA =================
         page_points = []
-        for i, (text, emb) in enumerate(zip(pages, page_embs)):
+        
+        for pid, page_text in enumerate(pages):
+            # Bỏ qua pages rỗng
+            if not page_text or not page_text.strip():
+                print(f"Warning: Page {pid} rỗng, bỏ qua")
+                continue
+            
+            # Tạo chunks cho page
+            chunks = chunk_page(page_text)
+            
+            # Nếu không có chunks hoặc chunks rỗng, dùng toàn bộ page_text
+            if not chunks:
+                chunks = [page_text]
+            
+            # Lọc chunks rỗng
+            chunks = [c for c in chunks if c and c.strip()]
+            
+            if not chunks:
+                print(f"Warning: Page {pid} không tạo được chunks hợp lệ")
+                continue
+            
+            # Embed chunks
+            with torch.no_grad():
+                chunk_embs = self.embed_model.encode(
+                    chunks,
+                    normalize_embeddings=True
+                ).tolist()
+            
+            # Trích xuất entities cho mỗi chunk
+            chunks_metadata = []
+            for chunk_id, (chunk_text, chunk_emb) in enumerate(zip(chunks, chunk_embs)):
+                entities = extract_entities(chunk_text)
+                
+                chunks_metadata.append({
+                    "chunk_id": chunk_id,
+                    "text": chunk_text,
+                    "embedding": chunk_emb,
+                    "entities": entities
+                })
+            
+            # Embed page (dùng page_text gốc)
+            with torch.no_grad():
+                page_emb = self.embed_model.encode(
+                    [page_text],
+                    normalize_embeddings=True
+                ).tolist()[0]
+            
+            # Lưu page với chunks metadata
             page_points.append(
                 PointStruct(
                     id=str(uuid.uuid4()),
-                    vector=emb,
+                    vector=page_emb,
                     payload={
-                        "text": text,
+                        "text": page_text,
                         "type": "page",
-                        "page": i,
-                        "original_index": i
+                        "page": pid,
+                        "original_index": pid,
+                        "chunks": chunks_metadata  # Lưu sẵn chunks với entities
                     }
                 )
             )
 
+        # Upsert tất cả pages
         self.client.upsert(
             collection_name=collection_name,
             points=page_points
         )
-
-        # ================= CHUNK LEVEL =================
-        chunk_points = []
-        for pid, text in enumerate(pages):
-            chunks = chunk_page(text)
-            if not chunks:
-                continue
-
-            with torch.no_grad():
-                embs = self.embed_model.encode(chunks).tolist()
-
-            for chunk_id, (chunk_text, chunk_emb) in enumerate(zip(chunks, embs)):
-                chunk_points.append(
-                    PointStruct(
-                        id=str(uuid.uuid4()),
-                        vector=chunk_emb,
-                        payload={
-                            "text": chunk_text,
-                            "type": "chunk",
-                            "page": pid,
-                            "chunk_id": chunk_id
-                        }
-                    )
-                )
-        if chunk_points:
-            self.client.upsert(
-                collection_name=collection_name,
-                points=chunk_points
-            )
-        print(f"Đã upload file '{file_name}' thành công")
+        
+        print(f"Đã upload file '{file_name}' với {len(page_points)} pages")
         return collection_name
 
     def list_collections(self):
@@ -114,6 +130,7 @@ class QdrantFileUploader:
     def check_file_uploaded(self, file_name: str):
         collection_name = f"doc_{file_name}"
         return self.load_collection(collection_name)
+    
     def delete_collection(self, name: str) -> bool:
         collection_name = name if name.startswith("doc_") else f"doc_{name}"
 

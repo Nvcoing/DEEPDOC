@@ -20,7 +20,3 @@ accessor = SearchResultAccessor(results)
 for rank in range(1, 11):
     text = accessor.get_chunk_highlighted(rank)
     print(f"Chunk {rank}: {text}")
-    
-    # Xem chunk này từ page nào
-    page = accessor.get_chunk_page(rank)
-    print(f"  → {page['collection']} - Trang {page['page']}")
