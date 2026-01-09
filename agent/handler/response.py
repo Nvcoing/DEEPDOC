@@ -1,9 +1,37 @@
 from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
-from llm.generate import generate_text
+from router import QueryRouter
 from typing import List
 
+router = QueryRouter("routes.json")
+
+
 def answer(question: str, file_names: List[str]) -> str:
+    route_result = router.route(question)
+
+    # ===== CASE 1: OUT OF SCOPE =====
+    if route_result["route"] == "out_of_scope":
+        final_prompt = f"""
+    <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+    You are a professional document reading assistant.
+
+    TASK:
+    Carefully read the uploaded document text and answer the question.
+
+    UPLOADED_DOCUMENT:
+    <<<BEGIN_DOCUMENT>>>
+    Khong co thong tin
+    <<<END_DOCUMENT>>>
+
+    QUESTION:
+    <<<BEGIN_QUESTION>>>
+    {question}
+    <<<END_QUESTION>>>
+    <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+    """
+        return final_prompt.strip()
+
+    # ===== CASE 2: NAVAL WARSHIP (IN SCOPE) =====
     file_paths = [COLLECTIONS + name for name in file_names]
 
     acc = query_document(
@@ -25,7 +53,6 @@ def answer(question: str, file_names: List[str]) -> str:
     - Answer in the SAME language as the question
     - Use information from the uploaded document as the PRIMARY source
     - Extract all relevant details (facts, definitions, numbers, conditions, steps, examples if present)
-    - If needed, add minimal general knowledge only to clarify, not to override the document
     - Be clear, direct, and well-structured
     - Do NOT mention the document or your reasoning process
 
@@ -36,7 +63,6 @@ def answer(question: str, file_names: List[str]) -> str:
     {acc.get_chunk_highlighted(2)}
 
     {acc.get_chunk_highlighted(3)}
-
     <<<END_DOCUMENT>>>
 
     QUESTION:
@@ -45,5 +71,4 @@ def answer(question: str, file_names: List[str]) -> str:
     <<<END_QUESTION>>>
     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
     """
-    print(repr(final_prompt))
-    return repr(final_prompt)
+    return final_prompt.strip()

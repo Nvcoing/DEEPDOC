@@ -1,0 +1,12 @@
+{
+  "classes": [
+    {
+      "label": "naval_warship",
+      "description": "Documents about naval warships, military ships, navy operations, warships, destroyers, frigates, aircraft carriers, naval weapons, missiles, naval combat systems, sea warfare"
+    },
+    {
+      "label": "chit_chat",
+      "description": "Casual conversation, small talk, daily life questions, food, weather, personal chat, jokes, general questions not related to any document or technical domain"
+    }
+  ]
+}
