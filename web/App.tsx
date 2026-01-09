@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { User, Document, ChatSession, Message, Language, Theme, ViewType, ResearchMode, NewsArticle, UserRole, DocStatus, Folder, ActivityLog, Department } from './types';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation, useParams } from 'react-router-dom';
+import { User, Document, ChatSession, Message, Language, Theme, ResearchMode, NewsArticle, UserRole, DocStatus, Folder, ActivityLog, Department } from './types';
 import { TRANSLATIONS } from './constants';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -19,7 +20,34 @@ const INITIAL_USERS: User[] = [
   { id: 'u2', name: 'User Cao Vũ', email: 'caovu9523@gmail.com', password: '09052003', role: 'user', allowedDocIds: [] }
 ];
 
-const App: React.FC = () => {
+// Protected Route Component
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  requiredRole?: 'admin' | 'user';
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+  const currentUser: User | null = (() => {
+    const saved = localStorage.getItem('dm_current_user');
+    return saved ? JSON.parse(saved) : null;
+  })();
+
+  if (!currentUser) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (requiredRole === 'admin' && currentUser.role !== 'admin') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Main App Content Component
+const AppContent: React.FC = () => {
+  const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId?: string }>();
+
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('dm_current_user');
     return saved ? JSON.parse(saved) : null;
@@ -55,11 +83,10 @@ const App: React.FC = () => {
 
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('documind-theme') as Theme) || 'auto');
   const [language, setLanguage] = useState<Language>(() => (localStorage.getItem('documind-lang') as Language) || 'English');
-  const [view, setView] = useState<ViewType>('dashboard');
   
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null);
-  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [activeSessionId, setActiveSessionId] = useState<string>(sessionId || '');
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -70,6 +97,14 @@ const App: React.FC = () => {
   const t = useMemo(() => TRANSLATIONS[language] || TRANSLATIONS.English, [language]);
   const langCodes = useMemo(() => Object.keys(TRANSLATIONS).map(l => ({ lang: l, code: TRANSLATIONS[l as Language].langCode })), []);
   const activeSession = useMemo(() => chatSessions.find(s => s.id === activeSessionId), [chatSessions, activeSessionId]);
+
+
+  // Update activeSessionId when route changes
+  useEffect(() => {
+    if (sessionId) {
+      setActiveSessionId(sessionId);
+    }
+  }, [sessionId]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -132,7 +167,6 @@ const App: React.FC = () => {
     if (currentUser.role === 'admin') {
       return folders.filter(f => f.userId === currentUser.id || !f.id.startsWith('personal-'));
     }
-    // Employees see folders belonging to their department.
     return folders.filter(f => currentUser.departmentId && f.departmentId === currentUser.departmentId);
   }, [folders, currentUser]);
 
@@ -165,7 +199,7 @@ const App: React.FC = () => {
     setIsUploading(true);
     
     const fileList = Array.from(files) as File[];
-    const targetFolderId = targetFid || (view === 'folders' ? currentFolderId : personalFolderId);
+    const targetFolderId = targetFid || personalFolderId;
     const targetFolder = folders.find(f => f.id === targetFolderId);
 
     const tempDocs: Document[] = fileList.map(file => ({
@@ -230,31 +264,33 @@ const App: React.FC = () => {
     };
     setChatSessions(prev => [newSession, ...prev]);
     setActiveSessionId(newId);
-    setView('chat');
+    navigate(`/chat/${newId}`);
   };
 
   const handleUpdateSession = (sessionId: string, messages: Message[]) => {
     setChatSessions(prev => prev.map(s => s.id === sessionId ? { ...s, messages, lastUpdated: new Date().toISOString() } : s));
   };
 
-  useEffect(() => {
-    if (currentUser) {
-      if (currentUser.role === 'admin' && view === 'folders') {
-        setView('dashboard');
-      }
-      if (currentUser.role !== 'admin' && view === 'admin-panel') {
-        setView('dashboard');
-      }
-    }
-  }, [currentUser, view]);
+  const handleLogout = () => {
+    setCurrentUser(null);
+    navigate('/login');
+  };
 
-  if (!currentUser) return <Login users={users} onLogin={(user) => { setCurrentUser(user); setView('dashboard'); }} t={t} />;
+  const handleLogin = (user: User) => {
+    setCurrentUser(user);
+    navigate('/dashboard');
+  };
+
+  if (!currentUser) {
+    return <Login users={users} onLogin={handleLogin} t={t} />;
+  }
 
   return (
     <div className="flex flex-col h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 overflow-hidden">
       <Header 
-        t={t} view={view} setView={setView} language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} 
-        langCodes={langCodes} user={currentUser} departments={departments} onLogout={() => { setCurrentUser(null); setView('dashboard'); }} 
+        t={t} 
+        language={language} setLanguage={setLanguage} theme={theme} setTheme={setTheme} 
+        langCodes={langCodes} user={currentUser} departments={departments} onLogout={handleLogout} 
       />
       <main className="flex-1 relative overflow-hidden">
         {toast && (
@@ -263,76 +299,140 @@ const App: React.FC = () => {
             <span className="font-bold text-sm">{toast.message}</span>
           </div>
         )}
-        <div className="h-full w-full overflow-hidden flex flex-col relative">
-          {view === 'dashboard' ? (
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <Dashboard 
-                t={t} chatSessions={chatSessions} documents={accessibleDocs} onCreateSession={() => createNewSession(t.startNew)} 
-                onOpenSession={(id) => { setActiveSessionId(id); setView('chat'); }} onFileAction={(d) => createNewSession(d.name)}
-                onFileUpload={(e) => handleFileUpload(e)} onPreview={setPreviewDoc} onDelete={handleFileDelete}
-                trendingNews={[]} isNewsLoading={false} onNewsAction={() => {}}
-                isAdmin={currentUser.role === 'admin'}
-              />
-            </div>
-          ) : view === 'history' ? (
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <HistoryView t={t} activities={activities} />
-            </div>
-          ) : view === 'profile' ? (
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <ProfileView t={t} user={currentUser} department={departments.find(d => d.id === currentUser.departmentId)} />
-            </div>
-          ) : view === 'admin-panel' && currentUser.role === 'admin' ? (
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <AdminPanel 
-                t={t} pendingDocs={documents.filter(d => d.status === 'pending')} 
-                onApprove={(id, s) => setDocuments(prev => prev.map(d => d.id === id ? { ...d, status: s } : d))} 
-                users={users} setUsers={setUsers} departments={departments} setDepartments={setDepartments}
-                folders={folders} setFolders={setFolders} allDocs={documents} setDocuments={setDocuments}
-                onAssignPermission={() => {}}
-                onDeletePermanently={async (id) => {
-                  const doc = documents.find(d => d.id === id);
-                  if (doc) {
-                    await deleteFilePermanently(doc.name);
-                    setDocuments(prev => prev.filter(d => d.id !== id));
-                    showToast("Đã xóa vĩnh viễn.");
-                  }
-                }}
-              />
-            </div>
-          ) : view === 'folders' && currentUser.role !== 'admin' ? (
-            <div className="flex-1 overflow-y-auto no-scrollbar">
-              <FoldersView 
-                t={t} folders={visibleFolders} documents={accessibleDocs} currentFolderId={currentFolderId} onNavigate={setCurrentFolderId} 
-                onCreateFolder={() => {}} 
-                onUpload={() => {}} 
-                onFilePreview={setPreviewDoc} onDeleteFolder={() => {}} 
-                onChatWithFolder={(fid) => createNewSession(folders.find(f => f.id === fid)?.name || "")}
-                isAdmin={false}
-              />
-            </div>
-          ) : activeSession && (
-            <ChatView 
-              t={t} activeSession={activeSession} researchMode={researchMode} setResearchMode={setResearchMode} onBack={() => setView('dashboard')} 
-              onFileUpload={handleFileUpload} onSendMessage={() => {}} 
-              onUpdateSession={handleUpdateSession}
-              inputValue={inputValue} setInputValue={setInputValue} 
-              isLoading={isLoading} isUploading={isUploading} fileInputRef={fileInputRef} 
-              folders={visibleFolders.filter(f => !f.isSystem)}
-              personalFolder={visibleFolders.find(f => f.id === personalFolderId)}
-              onToggleFolderInChat={() => {}} 
-              selectedFolderIds={[]}
-              sessionDocs={accessibleDocs} 
-              selectedDocIds={accessibleDocs.filter(d => d.status === 'approved').map(d => d.id)} 
-              onToggleDoc={() => {}}
-              onSelectAll={() => {}}
-              onDeselectAll={() => {}}
-            />
-          )}
-        </div>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          
+          <Route path="/dashboard" element={
+            <ProtectedRoute>
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                <Dashboard 
+                  t={t} chatSessions={chatSessions} documents={accessibleDocs} onCreateSession={() => createNewSession(t.startNew)} 
+                  onOpenSession={(id) => navigate(`/chat/${id}`)} onFileAction={(d) => createNewSession(d.name)}
+                  onFileUpload={(e) => handleFileUpload(e)} onPreview={setPreviewDoc} onDelete={handleFileDelete}
+                  trendingNews={[]} isNewsLoading={false} onNewsAction={() => {}}
+                  isAdmin={currentUser.role === 'admin'}
+                />
+              </div>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/history" element={
+            <ProtectedRoute>
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                <HistoryView t={t} activities={activities} />
+              </div>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/profile" element={
+            <ProtectedRoute>
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                <ProfileView t={t} user={currentUser} department={departments.find(d => d.id === currentUser.departmentId)} />
+              </div>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/admin-panel" element={
+            <ProtectedRoute requiredRole="admin">
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                <AdminPanel 
+                  t={t} pendingDocs={documents.filter(d => d.status === 'pending')} 
+                  onApprove={(id, s) => setDocuments(prev => prev.map(d => d.id === id ? { ...d, status: s } : d))} 
+                  users={users} setUsers={setUsers} departments={departments} setDepartments={setDepartments}
+                  folders={folders} setFolders={setFolders} allDocs={documents} setDocuments={setDocuments}
+                  onAssignPermission={() => {}}
+                  onDeletePermanently={async (id) => {
+                    const doc = documents.find(d => d.id === id);
+                    if (doc) {
+                      await deleteFilePermanently(doc.name);
+                      setDocuments(prev => prev.filter(d => d.id !== id));
+                      showToast("Đã xóa vĩnh viễn.");
+                    }
+                  }}
+                />
+              </div>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/folders" element={
+            <ProtectedRoute>
+              <div className="flex-1 overflow-y-auto no-scrollbar">
+                {currentUser.role !== 'admin' ? (
+                  <FoldersView 
+                    t={t} folders={visibleFolders} documents={accessibleDocs} currentFolderId={currentFolderId} onNavigate={setCurrentFolderId} 
+                    onCreateFolder={() => {}} 
+                    onUpload={() => {}} 
+                    onFilePreview={setPreviewDoc} onDeleteFolder={() => {}} 
+                    onChatWithFolder={(fid) => createNewSession(folders.find(f => f.id === fid)?.name || "")}
+                    isAdmin={false}
+                  />
+                ) : (
+                  <Navigate to="/dashboard" replace />
+                )}
+              </div>
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/chat" element={
+            <ProtectedRoute>
+              {(() => {
+                // If no sessionId in URL, redirect to dashboard or use most recent session
+                const mostRecentSession = chatSessions.length > 0 
+                  ? chatSessions.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime())[0]
+                  : null;
+                
+                if (mostRecentSession) {
+                  return <Navigate to={`/chat/${mostRecentSession.id}`} replace />;
+                }
+                return <Navigate to="/dashboard" replace />;
+              })()}
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/chat/:sessionId" element={
+            <ProtectedRoute>
+              {activeSession ? (
+                <ChatView 
+                  t={t} activeSession={activeSession} researchMode={researchMode} setResearchMode={setResearchMode} 
+                  onBack={() => navigate('/dashboard')} 
+                  onFileUpload={handleFileUpload} onSendMessage={() => {}} 
+                  onUpdateSession={handleUpdateSession}
+                  inputValue={inputValue} setInputValue={setInputValue} 
+                  isLoading={isLoading} isUploading={isUploading} fileInputRef={fileInputRef} 
+                  folders={visibleFolders.filter(f => !f.isSystem)}
+                  personalFolder={visibleFolders.find(f => f.id === personalFolderId)}
+                  onToggleFolderInChat={() => {}} 
+                  selectedFolderIds={[]}
+                  sessionDocs={accessibleDocs} 
+                  selectedDocIds={accessibleDocs.filter(d => d.status === 'approved').map(d => d.id)} 
+                  onToggleDoc={() => {}}
+                  onSelectAll={() => {}}
+                  onDeselectAll={() => {}}
+                />
+              ) : (
+                <Navigate to="/dashboard" replace />
+              )}
+            </ProtectedRoute>
+          } />
+          
+          <Route path="/login" element={
+            currentUser ? <Navigate to="/dashboard" replace /> : <Login users={users} onLogin={handleLogin} t={t} />
+          } />
+          
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
         {previewDoc && <PreviewModal t={t} doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
       </main>
     </div>
+  );
+};
+
+// Main App Component with Router
+const App: React.FC = () => {
+  return (
+    <BrowserRouter>
+      <AppContent />
+    </BrowserRouter>
   );
 };
 

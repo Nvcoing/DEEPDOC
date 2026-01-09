@@ -1,12 +1,11 @@
 
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { Library, LayoutDashboard, FolderTree, Languages, Sun, Moon, Monitor, LogOut, Clock, User as UserIcon, ShieldCheck } from 'lucide-react';
-import { Language, Theme, ViewType, User } from '../types';
+import { Language, Theme, User } from '../types';
 
 interface HeaderProps {
   t: any;
-  view: ViewType;
-  setView: (v: ViewType) => void;
   language: Language;
   setLanguage: (l: Language) => void;
   theme: Theme;
@@ -17,7 +16,7 @@ interface HeaderProps {
   onLogout: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, user, onLogout }) => {
+const Header: React.FC<HeaderProps> = ({ t, language, setLanguage, theme, setTheme, langCodes, user, onLogout }) => {
   const toggleTheme = () => {
     if (theme === 'light') setTheme('dark');
     else if (theme === 'dark') setTheme('auto');
@@ -35,53 +34,53 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
   return (
     <header className="h-16 flex-shrink-0 bg-white/90 dark:bg-slate-900/95 backdrop-blur-xl border-b border-slate-200/60 dark:border-slate-800/60 px-6 flex items-center justify-between z-40 shadow-sm">
       <div className="flex items-center gap-8">
-        <div className="flex items-center gap-3 cursor-pointer group select-none" onClick={() => setView('dashboard')}>
+        <NavLink to="/dashboard" className="flex items-center gap-3 cursor-pointer group select-none">
           <div className="w-9 h-9 bg-gradient-to-tr from-indigo-600 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200 dark:shadow-none transition-transform group-hover:scale-105">
             <Library className="text-white w-5 h-5" />
           </div>
           <span className="font-black text-xl tracking-tight italic dark:text-white leading-none pt-0.5">{t.brandName}</span>
-        </div>
+        </NavLink>
         
         <nav className="hidden md:flex items-center gap-2">
-          <button 
-            onClick={() => setView('dashboard')} 
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'dashboard' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+          <NavLink 
+            to="/dashboard" 
+            className={({ isActive }) => `flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
           >
             <LayoutDashboard className="w-4 h-4" /> {t.home}
-          </button>
+          </NavLink>
           
           {user?.role === 'admin' ? (
-            <button 
-              onClick={() => setView('admin-panel')} 
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'admin-panel' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            <NavLink 
+              to="/admin-panel" 
+              className={({ isActive }) => `flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
               <ShieldCheck className="w-4 h-4" /> {t.adminPanel}
-            </button>
+            </NavLink>
           ) : (
-            <button 
-              onClick={() => setView('folders')} 
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'folders' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            <NavLink 
+              to="/folders" 
+              className={({ isActive }) => `flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${isActive ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
               <FolderTree className="w-4 h-4" /> {t.folderMgmt}
-            </button>
+            </NavLink>
           )}
 
-          <button 
-            onClick={() => setView('history')} 
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'history' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+          <NavLink 
+            to="/history" 
+            className={({ isActive }) => `flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
           >
             <Clock className="w-4 h-4" /> {t.history}
-          </button>
+          </NavLink>
         </nav>
       </div>
 
       <div className="flex items-center gap-3">
-        <button 
-          onClick={() => setView('profile')}
-          className={`p-2.5 rounded-xl border transition-all ${view === 'profile' ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100'}`}
+        <NavLink 
+          to="/profile"
+          className={({ isActive }) => `p-2.5 rounded-xl border transition-all ${isActive ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100'}`}
         >
           <UserIcon className="w-4.5 h-4.5" />
-        </button>
+        </NavLink>
 
         <button 
           onClick={toggleTheme}
