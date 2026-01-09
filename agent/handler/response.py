@@ -1,6 +1,6 @@
 from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
-from router import QueryRouter
+from handler.router import QueryRouter
 from typing import List
 
 router = QueryRouter("routes.json")
