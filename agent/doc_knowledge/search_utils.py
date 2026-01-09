@@ -1,207 +1,169 @@
 import torch
 import gc
-import json
-from typing import List, Set
-from difflib import SequenceMatcher
+from typing import List, Dict, Set
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-from doc_knowledge.entities import highlight_markdown
+from doc_knowledge.entities import extract_entities, highlight_markdown
 from doc_knowledge.config import embed_model, rank_model, device, CLIENT
-
 
 class DOCSearcher:
     def __init__(
         self,
         collections: List[str],
-        chunk_topk=10,
-        similarity_threshold=0.7  # Ngưỡng để phát hiện trùng lặp
+        page_topk=10,          # Số page để search
+        chunk_topk=5           # Số chunk tốt nhất sau rerank
     ):
         self.collections = collections
+        self.page_topk = page_topk
         self.chunk_topk = chunk_topk
-        self.similarity_threshold = similarity_threshold
 
-    def _text_similarity(self, text1: str, text2: str) -> float:
-        """Tính độ tương đồng giữa 2 đoạn text"""
-        return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+    def _scroll_page(self, collection: str, pid: int) -> str:
+        """Lấy full text của page từ vector DB"""
+        res = CLIENT.scroll(
+            collection_name=collection,
+            scroll_filter=Filter(must=[
+                FieldCondition(key="type", match=MatchValue(value="page")),
+                FieldCondition(key="page", match=MatchValue(value=pid))
+            ]),
+            with_payload=True
+        )
+        return res[0][0].payload.get("text", "") if res[0] else ""
 
-    def _is_duplicate(self, text: str, existing_texts: List[str]) -> bool:
-        """Kiểm tra text có trùng với bất kỳ text nào đã có không"""
-        for existing in existing_texts:
-            if self._text_similarity(text, existing) >= self.similarity_threshold:
-                return True
-        return False
-
-    def _merge_overlapping_chunks(self, chunks_with_meta: list):
+    def _get_chunks_for_pages(
+        self, 
+        collection: str, 
+        page_ids: Set[int]
+    ) -> Dict[tuple, str]:
         """
-        Gộp các chunks có nội dung trùng lặp
-        Nếu chunk overlap giữa 2 page khác nhau -> gộp metadata của cả 2 page
+        Lấy tất cả chunks của các pages đã chọn.
+        Return: {(collection, page_id, chunk_id): chunk_text}
         """
-        merged = []
-        seen_texts = []
+        chunks = {}
         
-        for chunk_data, page_meta in chunks_with_meta:
-            text = chunk_data.get("text", "").strip()
+        for pid in page_ids:
+            res = CLIENT.scroll(
+                collection_name=collection,
+                scroll_filter=Filter(must=[
+                    FieldCondition(key="type", match=MatchValue(value="chunk")),
+                    FieldCondition(key="page", match=MatchValue(value=pid))
+                ]),
+                with_payload=True,
+                limit=100  # Mỗi page tối đa 3 chunks
+            )
             
-            if not text:
-                continue
-            
-            # Kiểm tra xem text này đã tồn tại chưa
-            duplicate_idx = None
-            for idx, existing_text in enumerate(seen_texts):
-                if self._text_similarity(text, existing_text) >= self.similarity_threshold:
-                    duplicate_idx = idx
-                    break
-            
-            if duplicate_idx is not None:
-                # Trùng lặp -> gộp page metadata
-                existing_item = merged[duplicate_idx]
-                existing_pages = existing_item[1]
-                
-                # Thêm page mới vào metadata nếu chưa có
-                page_key = (page_meta["collection"], page_meta["page"])
-                if page_key not in [(p["collection"], p["page"]) for p in existing_pages]:
-                    existing_pages.append(page_meta)
-                
-            else:
-                # Chunk mới -> thêm vào
-                merged.append((chunk_data, [page_meta]))
-                seen_texts.append(text)
+            for point in res[0]:
+                payload = point.payload
+                chunk_id = payload.get("chunk_id", 0)
+                chunk_text = payload.get("text", "")
+                if chunk_text:
+                    chunks[(collection, pid, chunk_id)] = chunk_text
         
-        return merged
+        return chunks
 
-    def _rerank_chunks(self, query, chunks_with_meta: list, topk: int):
-        """
-        Rerank chunks đã được deduplicate
-        chunks_with_meta: [(chunk_data, [page_metadata_list]), ...]
-        """
-        if not chunks_with_meta:
+    def _rerank(self, query: str, items: dict, topk: int) -> list:
+        """Rerank các items bằng cross-encoder"""
+        if not items:
             return []
         
-        # Tạo pairs cho reranking
-        pairs = [(query, item[0]["text"]) for item in chunks_with_meta]
-        scores = rank_model.predict(pairs, batch_size=32)
+        pairs = [(query, text) for text in items.values()]
+        scores = rank_model.predict(pairs, batch_size=8)
         
-        # Rank theo score
         ranked = sorted(
-            zip(chunks_with_meta, scores),
+            zip(items.keys(), scores),
             key=lambda x: x[1],
             reverse=True
         )
-        
         return ranked[:topk]
 
     def search(self, query: str):
-        """
-        Search và trả về chunks KHÔNG TRÙNG LẶP:
-        - Loại bỏ chunks giống nhau
-        - Nếu chunk xuất hiện ở nhiều pages -> gộp metadata
-        """
+        # ===== 1. EMBED QUERY 1 LẦN =====
         with torch.no_grad():
             q_emb = embed_model.encode(
                 [query],
                 normalize_embeddings=True
             ).tolist()[0]
 
-        all_chunks_with_meta = []  # [(chunk_data, page_metadata), ...]
-
-        # ===== Thu thập TẤT CẢ chunks từ tất cả collections =====
+        global_pages = {}  # {(collection, page_id): page_text}
+        
+        # ===== 2. SEARCH TOP PAGES (10 PAGES) =====
+        print(f"\n🔍 Đang search top {self.page_topk} pages...")
+        
         for col in self.collections:
             try:
-                pages = CLIENT.search(
+                page_results = CLIENT.search(
                     collection_name=col,
                     query_vector=q_emb,
                     query_filter=Filter(
                         must=[FieldCondition(key="type", match=MatchValue(value="page"))]
                     ),
-                    limit=10,
+                    limit=self.page_topk,
                     with_payload=True
                 )
 
-                for p in pages:
-                    page_metadata = {
-                        "collection": col,
-                        "page": p.payload["page"] + 1,
-                        "page_id": p.payload["page"]
-                    }
-                    
-                    chunks = p.payload.get("chunks", [])
-                    
-                    for chunk in chunks:
-                        if chunk.get("text", "").strip():
-                            all_chunks_with_meta.append((chunk, page_metadata))
-
+                for p in page_results:
+                    pid = p.payload["page"]
+                    page_text = p.payload.get("text", "")
+                    if page_text:
+                        global_pages[(col, pid)] = page_text
+                        
             except Exception as e:
-                print(f"Search error in {col}: {e}")
+                print(f"⚠️  Search error in {col}: {e}")
 
-        if not all_chunks_with_meta:
-            print("Không tìm thấy chunks nào")
+        print(f"✓ Tìm thấy {len(global_pages)} pages từ {len(self.collections)} collections")
+
+        if not global_pages:
+            print("❌ Không tìm thấy pages nào!")
             return []
 
-        # ===== Gộp chunks trùng lặp =====
-        print(f"Tổng chunks ban đầu: {len(all_chunks_with_meta)}")
-        merged_chunks = self._merge_overlapping_chunks(all_chunks_with_meta)
-        print(f"Sau khi gộp trùng lặp: {len(merged_chunks)}")
-
-        # ===== Rerank chunks đã deduplicate =====
-        ranked_chunks = self._rerank_chunks(
-            query,
-            merged_chunks,
-            self.chunk_topk
-        )
-
-        # ===== Format output =====
-        results = []
-        for rank, ((chunk_data, page_metas), score) in enumerate(ranked_chunks, start=1):
-            chunk_text = chunk_data.get("text", "").strip()
-            entities = chunk_data.get("entities", [])
-            highlighted = highlight_markdown(chunk_text, entities)
+        # ===== 3. LẤY TẤT CẢ CHUNKS CỦA CÁC PAGES ĐÃ CHỌN =====
+        print(f"\n📦 Đang lấy chunks của {len(global_pages)} pages...")
+        
+        all_chunks = {}  # {(collection, page_id, chunk_id): chunk_text}
+        
+        for col in self.collections:
+            # Lấy page_ids thuộc collection này
+            page_ids = {pid for (c, pid) in global_pages.keys() if c == col}
             
-            # Tạo thông tin pages (có thể có nhiều pages)
-            pages_info = []
-            for page_meta in page_metas:
-                pages_info.append({
-                    "collection": page_meta["collection"],
-                    "page": page_meta["page"],
-                    "chunk_id": chunk_data.get("chunk_id", 0)
-                })
+            if page_ids:
+                chunks = self._get_chunks_for_pages(col, page_ids)
+                all_chunks.update(chunks)
+        
+        print(f"✓ Thu thập được {len(all_chunks)} chunks")
+
+        # ===== 4. RERANK CHUNKS =====
+        print(f"\n🎯 Đang rerank {len(all_chunks)} chunks...")
+        
+        ranked_chunks = self._rerank(query, all_chunks, self.chunk_topk)
+        
+        print(f"✓ Chọn top {len(ranked_chunks)} chunks có điểm cao nhất")
+
+        # ===== 5. TẠO OUTPUT THEO CHUNKS (KHÔNG THEO PAGES) =====
+        outputs = []
+        
+        for rank, ((col, pid, chunk_id), score) in enumerate(ranked_chunks, start=1):
+            chunk_text = all_chunks[(col, pid, chunk_id)]
+            page_text = global_pages[(col, pid)]
             
-            results.append({
+            # Highlight entities trong chunk
+            highlighted_chunk = highlight_markdown(
+                chunk_text, 
+                extract_entities(chunk_text)
+            )
+            
+            outputs.append({
                 "rank": rank,
+                "collection": col,
+                "page": pid + 1,  # Hiển thị page number (1-indexed)
+                "chunk_id": chunk_id + 1,  # 1, 2, hoặc 3 (phần đầu/giữa/cuối)
                 "score": round(float(score), 4),
-                "text": chunk_text,
-                "highlighted_text": highlighted,
-                "entities": entities,
-                "pages": pages_info,  # Danh sách các pages chứa chunk này
-                "is_merged": len(pages_info) > 1  # True nếu chunk xuất hiện ở nhiều pages
+                "chunk_text": chunk_text,
+                "highlighted_chunk": highlighted_chunk,
+                "full_page_text": page_text  # Có thể dùng để context
             })
 
+        # ===== 6. CLEANUP MEMORY =====
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
 
-        return results
-
-    def search_and_save(self, query: str, output_file: str = "search_results.json"):
-        """
-        Search và lưu kết quả ra file JSON
-        """
-        results = self.search(query)
-        
-        # Thống kê
-        merged_count = sum(1 for r in results if r["is_merged"])
-        
-        output = {
-            "query": query,
-            "total_chunks": len(results),
-            "merged_chunks": merged_count,
-            "unique_chunks": len(results) - merged_count,
-            "chunks": results
-        }
-        
-        with open(output_file, 'w', encoding='utf-8') as f:
-            json.dump(output, f, ensure_ascii=False, indent=2)
-        
-        print(f"✅ Đã lưu {len(results)} chunks vào {output_file}")
-        print(f"   - Chunks độc nhất: {len(results) - merged_count}")
-        print(f"   - Chunks gộp từ nhiều pages: {merged_count}")
-        
-        return output
+        print(f"\n✅ Hoàn thành! Trả về {len(outputs)} kết quả tốt nhất")
+        return outputs
