@@ -1,169 +1,119 @@
 import torch
 import gc
-from typing import List, Dict, Set
+from typing import List
 from qdrant_client.models import Filter, FieldCondition, MatchValue
-from doc_knowledge.entities import extract_entities, highlight_markdown
+from doc_knowledge.entities import highlight_markdown
 from doc_knowledge.config import embed_model, rank_model, device, CLIENT
 
+
 class DOCSearcher:
-    def __init__(
-        self,
-        collections: List[str],
-        page_topk=10,          # Số page để search
-        chunk_topk=5           # Số chunk tốt nhất sau rerank
-    ):
+    def __init__(self, collections: List[str], top_k=10):
+        """
+        Args:
+            collections: Danh sách tên collections
+            top_k: Số lượng chunks top trả về
+        """
         self.collections = collections
-        self.page_topk = page_topk
-        self.chunk_topk = chunk_topk
-
-    def _scroll_page(self, collection: str, pid: int) -> str:
-        """Lấy full text của page từ vector DB"""
-        res = CLIENT.scroll(
-            collection_name=collection,
-            scroll_filter=Filter(must=[
-                FieldCondition(key="type", match=MatchValue(value="page")),
-                FieldCondition(key="page", match=MatchValue(value=pid))
-            ]),
-            with_payload=True
-        )
-        return res[0][0].payload.get("text", "") if res[0] else ""
-
-    def _get_chunks_for_pages(
-        self, 
-        collection: str, 
-        page_ids: Set[int]
-    ) -> Dict[tuple, str]:
-        """
-        Lấy tất cả chunks của các pages đã chọn.
-        Return: {(collection, page_id, chunk_id): chunk_text}
-        """
-        chunks = {}
-        
-        for pid in page_ids:
-            res = CLIENT.scroll(
-                collection_name=collection,
-                scroll_filter=Filter(must=[
-                    FieldCondition(key="type", match=MatchValue(value="chunk")),
-                    FieldCondition(key="page", match=MatchValue(value=pid))
-                ]),
-                with_payload=True,
-                limit=100  # Mỗi page tối đa 3 chunks
-            )
-            
-            for point in res[0]:
-                payload = point.payload
-                chunk_id = payload.get("chunk_id", 0)
-                chunk_text = payload.get("text", "")
-                if chunk_text:
-                    chunks[(collection, pid, chunk_id)] = chunk_text
-        
-        return chunks
-
-    def _rerank(self, query: str, items: dict, topk: int) -> list:
-        """Rerank các items bằng cross-encoder"""
-        if not items:
-            return []
-        
-        pairs = [(query, text) for text in items.values()]
-        scores = rank_model.predict(pairs, batch_size=8)
-        
-        ranked = sorted(
-            zip(items.keys(), scores),
-            key=lambda x: x[1],
-            reverse=True
-        )
-        return ranked[:topk]
+        self.top_k = top_k
 
     def search(self, query: str):
-        # ===== 1. EMBED QUERY 1 LẦN =====
+        """
+        Search và trả về top_k chunks có độ chính xác cao nhất
+        """
+        # Embed query
         with torch.no_grad():
             q_emb = embed_model.encode(
                 [query],
                 normalize_embeddings=True
             ).tolist()[0]
 
-        global_pages = {}  # {(collection, page_id): page_text}
-        
-        # ===== 2. SEARCH TOP PAGES (10 PAGES) =====
-        print(f"\n🔍 Đang search top {self.page_topk} pages...")
-        
+        all_chunks = []  # [(chunk_text, entities, page_info), ...]
+
+        # Thu thập chunks từ tất cả collections
         for col in self.collections:
             try:
-                page_results = CLIENT.search(
+                # Search pages trong collection
+                pages = CLIENT.search(
                     collection_name=col,
                     query_vector=q_emb,
                     query_filter=Filter(
                         must=[FieldCondition(key="type", match=MatchValue(value="page"))]
                     ),
-                    limit=self.page_topk,
+                    limit=20,  # Lấy nhiều pages để có đủ chunks
                     with_payload=True
                 )
 
-                for p in page_results:
-                    pid = p.payload["page"]
-                    page_text = p.payload.get("text", "")
-                    if page_text:
-                        global_pages[(col, pid)] = page_text
+                # Lấy chunks từ mỗi page
+                for page_result in pages:
+                    page_payload = page_result.payload
+                    chunks = page_payload.get("chunks", [])
+                    
+                    for chunk in chunks:
+                        chunk_text = chunk.get("text", "").strip()
+                        if not chunk_text:
+                            continue
                         
+                        entities = chunk.get("entities", [])
+                        pages_involved = chunk.get("pages", [page_payload["page"]])
+                        
+                        all_chunks.append({
+                            "text": chunk_text,
+                            "entities": entities,
+                            "collection": col,
+                            "pages": pages_involved,
+                            "chunk_id": chunk.get("chunk_id", 0)
+                        })
+
             except Exception as e:
-                print(f"⚠️  Search error in {col}: {e}")
+                print(f"Search error in {col}: {e}")
 
-        print(f"✓ Tìm thấy {len(global_pages)} pages từ {len(self.collections)} collections")
-
-        if not global_pages:
-            print("❌ Không tìm thấy pages nào!")
+        if not all_chunks:
+            print("Không tìm thấy chunks nào")
             return []
 
-        # ===== 3. LẤY TẤT CẢ CHUNKS CỦA CÁC PAGES ĐÃ CHỌN =====
-        print(f"\n📦 Đang lấy chunks của {len(global_pages)} pages...")
-        
-        all_chunks = {}  # {(collection, page_id, chunk_id): chunk_text}
-        
-        for col in self.collections:
-            # Lấy page_ids thuộc collection này
-            page_ids = {pid for (c, pid) in global_pages.keys() if c == col}
-            
-            if page_ids:
-                chunks = self._get_chunks_for_pages(col, page_ids)
-                all_chunks.update(chunks)
-        
-        print(f"✓ Thu thập được {len(all_chunks)} chunks")
+        print(f"Tổng chunks thu thập: {len(all_chunks)}")
 
-        # ===== 4. RERANK CHUNKS =====
-        print(f"\n🎯 Đang rerank {len(all_chunks)} chunks...")
+        # Rerank bằng CrossEncoder
+        pairs = [(query, chunk["text"]) for chunk in all_chunks]
+        scores = rank_model.predict(pairs, batch_size=32)
         
-        ranked_chunks = self._rerank(query, all_chunks, self.chunk_topk)
+        # Gắn score vào chunks
+        for chunk, score in zip(all_chunks, scores):
+            chunk["score"] = float(score)
         
-        print(f"✓ Chọn top {len(ranked_chunks)} chunks có điểm cao nhất")
+        # Sắp xếp theo score giảm dần
+        all_chunks.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Lấy top_k
+        top_chunks = all_chunks[:self.top_k]
 
-        # ===== 5. TẠO OUTPUT THEO CHUNKS (KHÔNG THEO PAGES) =====
-        outputs = []
-        
-        for rank, ((col, pid, chunk_id), score) in enumerate(ranked_chunks, start=1):
-            chunk_text = all_chunks[(col, pid, chunk_id)]
-            page_text = global_pages[(col, pid)]
+        # Format kết quả
+        results = []
+        for rank, chunk in enumerate(top_chunks, start=1):
+            highlighted = highlight_markdown(chunk["text"], chunk["entities"])
             
-            # Highlight entities trong chunk
-            highlighted_chunk = highlight_markdown(
-                chunk_text, 
-                extract_entities(chunk_text)
-            )
+            # Tạo thông tin pages
+            pages_info = []
+            for page_num in chunk["pages"]:
+                pages_info.append({
+                    "collection": chunk["collection"],
+                    "page": page_num + 1,  # Convert to 1-indexed
+                    "chunk_id": chunk["chunk_id"]
+                })
             
-            outputs.append({
+            results.append({
                 "rank": rank,
-                "collection": col,
-                "page": pid + 1,  # Hiển thị page number (1-indexed)
-                "chunk_id": chunk_id + 1,  # 1, 2, hoặc 3 (phần đầu/giữa/cuối)
-                "score": round(float(score), 4),
-                "chunk_text": chunk_text,
-                "highlighted_chunk": highlighted_chunk,
-                "full_page_text": page_text  # Có thể dùng để context
+                "score": round(chunk["score"], 4),
+                "text": chunk["text"],
+                "highlighted_text": highlighted,
+                "entities": chunk["entities"],
+                "pages": pages_info,
+                "is_merged": len(chunk["pages"]) > 1
             })
 
-        # ===== 6. CLEANUP MEMORY =====
+        # Cleanup
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
 
-        print(f"\n✅ Hoàn thành! Trả về {len(outputs)} kết quả tốt nhất")
-        return outputs
+        return results

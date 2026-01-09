@@ -9,8 +9,8 @@ def answer(question: str, file_names: List[str]) -> str:
     acc = query_document(
         file_paths=file_paths,
         query=question,
-        page_topk=5,
         chunk_topk=3,
+        similarity_threshold=0.7
     )
 
     final_prompt = f"""
@@ -35,6 +35,7 @@ def answer(question: str, file_names: List[str]) -> str:
     {acc.get_chunk_highlighted(2)}
 
     {acc.get_chunk_highlighted(3)}
+
     <<<END_DOCUMENT>>>
 
     QUESTION:
