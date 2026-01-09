@@ -3,7 +3,7 @@ from doc_knowledge.config import COLLECTIONS
 from handler.router import QueryRouter
 from typing import List
 
-router = QueryRouter("routes.json")
+router = QueryRouter("./handler/routes.json")
 
 
 def answer(question: str, file_names: List[str]) -> str:
