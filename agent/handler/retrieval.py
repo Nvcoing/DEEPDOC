@@ -27,7 +27,7 @@ def query_document(
     # ===== 2. Search multi-collection =====
     searcher = DOCSearcher(
         collections=collections,
-        chunk_topk=chunk_topk,
+        top_k=chunk_topk,
     )
 
     results = searcher.search(query)
