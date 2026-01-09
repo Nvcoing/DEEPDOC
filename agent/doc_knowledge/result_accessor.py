@@ -4,6 +4,12 @@ class SearchResultAccessor:
     def __init__(self, results):
         self.chunks = results
 
+    def is_no_result(self):
+        """Kiểm tra xem có kết quả hay không"""
+        if not self.chunks:
+            return True
+        return self.chunks[0].get("no_result", False)
+
     def get_chunk(self, rank):
         """Lấy chunk theo rank (1-indexed)"""
         for chunk in self.chunks:
@@ -68,6 +74,13 @@ class SearchResultAccessor:
     def print_summary(self):
         """In tóm tắt kết quả"""
         print(f"\n{'='*70}")
+        
+        # Kiểm tra nếu không có kết quả
+        if self.is_no_result():
+            print("⚠️  KHÔNG TÌM THẤY THÔNG TIN PHÙ HỢP")
+            print(f"{'='*70}")
+            return
+        
         print(f"Tổng số chunks: {len(self.chunks)}")
         merged = sum(1 for c in self.chunks if c.get("is_merged"))
         print(f"Chunks tràn nhiều pages: {merged}")

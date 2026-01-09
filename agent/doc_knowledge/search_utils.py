@@ -7,14 +7,18 @@ from doc_knowledge.config import embed_model, rank_model, device, CLIENT
 
 
 class DOCSearcher:
-    def __init__(self, collections: List[str], top_k=10):
+    def __init__(self, collections: List[str], top_chunk=3, top_page=5, score_threshold=0.7):
         """
         Args:
             collections: Danh sách tên collections
-            top_k: Số lượng chunks top trả về
+            top_chunk: Số lượng chunks top trả về
+            top_page: Số page top lấy từ mỗi collection
+            score_threshold: Ngưỡng score tối thiểu (bỏ qua chunks thấp hơn)
         """
         self.collections = collections
-        self.top_k = top_k
+        self.top_chunk = top_chunk
+        self.top_page = top_page  # Số page top lấy từ mỗi collection
+        self.score_threshold = score_threshold
 
     def search(self, query: str):
         """
@@ -32,14 +36,14 @@ class DOCSearcher:
         # Thu thập chunks từ tất cả collections
         for col in self.collections:
             try:
-                # Search pages trong collection
+                # Search CHỈ 5 pages trong collection
                 pages = CLIENT.search(
                     collection_name=col,
                     query_vector=q_emb,
                     query_filter=Filter(
                         must=[FieldCondition(key="type", match=MatchValue(value="page"))]
                     ),
-                    limit=20,  # Lấy nhiều pages để có đủ chunks
+                    limit=self.top_page,
                     with_payload=True
                 )
 
@@ -77,15 +81,25 @@ class DOCSearcher:
         pairs = [(query, chunk["text"]) for chunk in all_chunks]
         scores = rank_model.predict(pairs, batch_size=32)
         
-        # Gắn score vào chunks
+        # Gắn score vào chunks và lọc theo threshold
+        filtered_chunks = []
         for chunk, score in zip(all_chunks, scores):
-            chunk["score"] = float(score)
+            score_value = float(score)
+            if score_value >= self.score_threshold:
+                chunk["score"] = score_value
+                filtered_chunks.append(chunk)
+        
+        if not filtered_chunks:
+            print(f"Không có chunk nào vượt ngưỡng {self.score_threshold}")
+            return []
+        
+        print(f"Chunks vượt ngưỡng {self.score_threshold}: {len(filtered_chunks)}/{len(all_chunks)}")
         
         # Sắp xếp theo score giảm dần
-        all_chunks.sort(key=lambda x: x["score"], reverse=True)
-        
-        # Lấy top_k
-        top_chunks = all_chunks[:self.top_k]
+        filtered_chunks.sort(key=lambda x: x["score"], reverse=True)
+
+        # Lấy top_chunk
+        top_chunks = filtered_chunks[:self.top_chunk]
 
         # Format kết quả
         results = []

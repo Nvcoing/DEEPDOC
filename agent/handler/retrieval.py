@@ -8,7 +8,9 @@ from doc_knowledge.vectordb_utils import QdrantFileUploader
 def query_document(
     file_paths: List[str],
     query: str,
-    chunk_topk: int = 3
+    top_chunk=3,
+    top_page=5,
+    score_threshold=0.7
 ) -> SearchResultAccessor:
 
     collections = []
@@ -27,7 +29,9 @@ def query_document(
     # ===== 2. Search multi-collection =====
     searcher = DOCSearcher(
         collections=collections,
-        top_k=chunk_topk,
+        top_chunk=top_chunk, 
+        top_page=top_page, 
+        score_threshold=score_threshold
     )
 
     results = searcher.search(query)

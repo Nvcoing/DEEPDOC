@@ -9,7 +9,9 @@ def answer(question: str, file_names: List[str]) -> str:
     acc = query_document(
         file_paths=file_paths,
         query=question,
-        chunk_topk=3,
+        top_chunk=3,
+        top_page=5,
+        score_threshold=0.7
     )
 
     final_prompt = f"""
