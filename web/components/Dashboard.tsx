@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ChevronRight, History, MessageSquare, Presentation, FileText, Eye, FolderIcon, Download, Trash2, Clock, CheckCircle, XCircle, Layout, Loader2, Plus } from 'lucide-react';
+import { ChevronRight, MessageSquare, Presentation, FileText, Eye, Download, Trash2, Clock, CheckCircle, XCircle, Layout, Loader2, Plus } from 'lucide-react';
 import { ChatSession, Document, NewsArticle } from '../types';
 import { downloadFile } from '../apiService';
 
@@ -17,11 +17,11 @@ interface DashboardProps {
   trendingNews: NewsArticle[];
   isNewsLoading: boolean;
   onNewsAction: () => void;
+  isAdmin: boolean;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
-  t, chatSessions, documents, onCreateSession, onOpenSession, onFileAction, onFileUpload, onPreview, onDelete,
-  trendingNews, isNewsLoading, onNewsAction
+  t, chatSessions, documents, onCreateSession, onOpenSession, onFileAction, onFileUpload, onPreview, onDelete, isAdmin
 }) => {
   const filteredDocs = documents.filter(doc => !doc.isDeleted);
 
@@ -86,10 +86,12 @@ const Dashboard: React.FC<DashboardProps> = ({
             <h3 className="font-black text-2xl flex items-center gap-3 dark:text-white italic uppercase tracking-tight">
               <div className="w-2 h-8 bg-indigo-500 rounded-full" /> {t.knowledgeTitle}
             </h3>
-            <label className="text-[11px] font-black text-indigo-600 cursor-pointer uppercase bg-indigo-50 dark:bg-indigo-900/30 px-5 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800/50 shadow-sm">
-              {t.uploadDesc}
-              <input type="file" className="hidden" multiple onChange={onFileUpload} />
-            </label>
+            {isAdmin && (
+              <label className="text-[11px] font-black text-indigo-600 cursor-pointer uppercase bg-indigo-50 dark:bg-indigo-900/30 px-5 py-2.5 rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 dark:border-indigo-800/50 shadow-sm">
+                {t.uploadDesc}
+                <input type="file" className="hidden" multiple onChange={onFileUpload} />
+              </label>
+            )}
           </div>
           <div className="grid gap-5">
             {filteredDocs.length > 0 ? filteredDocs.map(doc => (
@@ -114,7 +116,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                       <Download className="w-5 h-5" />
                     </button>
                   )}
-                  {doc.status !== 'uploading' && (
+                  {isAdmin && doc.status !== 'uploading' && (
                     <button onClick={() => onDelete?.(doc.id)} className="p-2.5 hover:bg-red-50 dark:hover:bg-slate-800 rounded-xl text-slate-400 hover:text-red-500 transition-colors">
                       <Trash2 className="w-5 h-5" />
                     </button>

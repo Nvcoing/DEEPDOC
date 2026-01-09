@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Library, LayoutDashboard, FolderTree, Languages, Sun, Moon, Monitor, ShieldCheck, LogOut, Clock, User as UserIcon } from 'lucide-react';
+import { Library, LayoutDashboard, FolderTree, Languages, Sun, Moon, Monitor, LogOut, Clock, User as UserIcon, ShieldCheck } from 'lucide-react';
 import { Language, Theme, ViewType, User } from '../types';
 
 interface HeaderProps {
@@ -19,7 +19,6 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage, theme, setTheme, langCodes, user, onLogout }) => {
   const toggleTheme = () => {
-    // Xoay vòng: Sáng -> Tối -> Hệ thống
     if (theme === 'light') setTheme('dark');
     else if (theme === 'dark') setTheme('auto');
     else setTheme('light');
@@ -51,16 +50,14 @@ const Header: React.FC<HeaderProps> = ({ t, view, setView, language, setLanguage
             <LayoutDashboard className="w-4 h-4" /> {t.home}
           </button>
           
-          {user?.role === 'admin' && (
+          {user?.role === 'admin' ? (
             <button 
               onClick={() => setView('admin-panel')} 
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'admin-panel' ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
             >
               <ShieldCheck className="w-4 h-4" /> {t.adminPanel}
             </button>
-          )}
-
-          {user?.role !== 'admin' && (
+          ) : (
             <button 
               onClick={() => setView('folders')} 
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all font-bold text-xs uppercase tracking-wider ${view === 'folders' ? 'bg-slate-50 dark:bg-slate-800 text-slate-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}

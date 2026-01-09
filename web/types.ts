@@ -1,7 +1,7 @@
 
 export type Language = 'English' | 'Vietnamese' | 'French' | 'German' | 'Japanese' | 'Korean' | 'Chinese';
 export type Theme = 'light' | 'dark' | 'auto';
-export type ViewType = 'chat' | 'dashboard' | 'folders' | 'admin-panel' | 'history' | 'profile';
+export type ViewType = 'chat' | 'dashboard' | 'folders' | 'history' | 'profile' | 'admin-panel';
 export type ResearchMode = 'new' | 'library';
 export type UserRole = 'admin' | 'user';
 export type DocStatus = 'pending' | 'approved' | 'rejected' | 'uploading';
