@@ -8,7 +8,7 @@ from doc_knowledge.vectordb_utils import QdrantFileUploader
 def query_document(
     file_paths: List[str],
     query: str,
-    chunk_topk: int = 10
+    chunk_topk: int = 3
 ) -> SearchResultAccessor:
 
     collections = []

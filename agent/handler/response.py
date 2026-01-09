@@ -9,7 +9,6 @@ def answer(question: str, file_names: List[str]) -> str:
     acc = query_document(
         file_paths=file_paths,
         query=question,
-        page_topk=5,
         chunk_topk=3,
     )
 
