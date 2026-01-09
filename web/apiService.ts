@@ -30,13 +30,33 @@ export async function uploadFileToBackend(file: File, folderId?: string, departm
   if (folderId) formData.append('folder_id', folderId);
   if (departmentId) formData.append('department_id', departmentId);
 
-  const response = await fetch(`${BACKEND_URL}/files`, {
-    method: 'POST',
-    body: formData
-  });
+  // Tăng timeout lên 30 phút (1800000ms) để hỗ trợ upload file lớn
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 1800000); // 30 phút
 
-  if (!response.ok) throw new Error(`Upload failed: ${response.statusText}`);
-  return response.json();
+  try {
+    const response = await fetch(`${BACKEND_URL}/files`, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      if (response.status === 504) {
+        throw new Error(`Upload timeout: File "${file.name}" may be too large.`);
+      }
+      throw new Error(`Upload failed: ${response.statusText}`);
+    }
+    return response.json();
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Upload timeout: File "${file.name}" took too long to upload. Please try a smaller file.`);
+    }
+    throw error;
+  }
 }
 
 export function downloadFile(fileName: string) {

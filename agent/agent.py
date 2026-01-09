@@ -7,6 +7,7 @@ from typing import List
 import os
 import shutil
 import mimetypes
+import asyncio
 
 from llm.generate import generate_stream
 from handler.response import answer
@@ -65,12 +66,20 @@ async def upload_files(files: List[UploadFile] = File(...)):
     uploaded_files = []
     collections = []
 
+    # Tăng timeout lên 30 phút (1800 giây) cho việc upload file lớn
     for file in files:
-        filename, collection = await run_in_threadpool(
-            save_and_upload, file
-        )
-        uploaded_files.append(filename)
-        collections.append(collection)
+        try:
+            filename, collection = await asyncio.wait_for(
+                run_in_threadpool(save_and_upload, file),
+                timeout=1800.0  # 30 phút
+            )
+            uploaded_files.append(filename)
+            collections.append(collection)
+        except asyncio.TimeoutError:
+            raise HTTPException(
+                status_code=504,
+                detail=f"Upload timeout for file: {file.filename}. File may be too large."
+            )
 
     return {
         "message": "Uploaded successfully",
