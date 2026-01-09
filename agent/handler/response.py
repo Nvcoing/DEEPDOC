@@ -9,14 +9,11 @@ router = QueryRouter("./handler/routes.json")
 def answer(question: str, file_names: List[str]) -> str:
     route_result = router.route(question)
 
-    # ===== CASE 1: OUT OF SCOPE =====
-    if route_result["route"] == "out_of_scope":
+    # ===== OUT OF SCOPE =====
+    if route_result["label"] != "naval_warship":
         final_prompt = f"""
     <|begin_of_text|><|start_header_id|>user<|end_header_id|>
     You are a professional document reading assistant.
-
-    TASK:
-    Carefully read the uploaded document text and answer the question.
 
     UPLOADED_DOCUMENT:
     <<<BEGIN_DOCUMENT>>>
@@ -31,7 +28,7 @@ def answer(question: str, file_names: List[str]) -> str:
     """
         return final_prompt.strip()
 
-    # ===== CASE 2: NAVAL WARSHIP (IN SCOPE) =====
+    # ===== IN SCOPE (NAVAL WARSHIP) =====
     file_paths = [COLLECTIONS + name for name in file_names]
 
     acc = query_document(
@@ -48,13 +45,6 @@ def answer(question: str, file_names: List[str]) -> str:
 
     TASK:
     Carefully read the uploaded document text and answer the question with detailed, complete, and accurate information.
-
-    INSTRUCTIONS:
-    - Answer in the SAME language as the question
-    - Use information from the uploaded document as the PRIMARY source
-    - Extract all relevant details (facts, definitions, numbers, conditions, steps, examples if present)
-    - Be clear, direct, and well-structured
-    - Do NOT mention the document or your reasoning process
 
     UPLOADED_DOCUMENT:
     <<<BEGIN_DOCUMENT>>>
