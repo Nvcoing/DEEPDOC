@@ -40,7 +40,7 @@ def answer(question: str, file_names: List[str]) -> str:
     acc = query_document(
         file_paths=file_paths,
         query=question,
-        top_chunk=3,
+        top_chunk=5,
         top_page=5,
         chunk_score_threshold=0.7,
         page_score_threshold=0.5,
