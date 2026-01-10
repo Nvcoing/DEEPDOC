@@ -1,97 +1,127 @@
-from typing import List, Tuple
+from typing import List
 from pypdf import PdfReader
 from docx import Document
 from pptx import Presentation
+from typing import List, Tuple
+import pytesseract
+from pdf2image import convert_from_path
+from PIL import Image
+import os
+
+
+OCR_LANGS = "vie+eng+chi_sim+chi_tra+jpn+kor"
+
+
+def ocr_image(image: Image.Image) -> str:
+    text = pytesseract.image_to_string(image, lang=OCR_LANGS)
+    return text.strip()
+
 
 def load_file_pages(path: str) -> List[str]:
-    """Load file và trả về list các pages"""
     ext = path.split('.')[-1].lower()
+    pages = []
 
+    # -------- PDF --------
     if ext == "pdf":
         reader = PdfReader(path)
-        return [p.extract_text() or "" for p in reader.pages]
 
+        for page_id, page in enumerate(reader.pages):
+            text = (page.extract_text() or "").strip()
+
+            # Nếu page không có text → OCR
+            if not text:
+                images = convert_from_path(path, first_page=page_id+1, last_page=page_id+1)
+                if images:
+                    ocr_text = ocr_image(images[0])
+                    text = ocr_text
+
+            if text:
+                pages.append(text)
+
+        return pages
+
+    # -------- DOCX --------
     if ext == "docx":
         doc = Document(path)
-        pages, buf, cnt = [], [], 0
+        buf, cnt = [], 0
+
         for para in doc.paragraphs:
             if para.text.strip():
                 buf.append(para.text.strip())
                 cnt += 1
+
             if cnt >= 20:
-                pages.append("\n".join(buf))
+                page = "\n".join(buf).strip()
+                if page:
+                    pages.append(page)
                 buf, cnt = [], 0
+
         if buf:
-            pages.append("\n".join(buf))
+            page = "\n".join(buf).strip()
+            if page:
+                pages.append(page)
+
         return pages
 
+    # -------- PPTX --------
     if ext == "pptx":
         pres = Presentation(path)
-        pages = []
+
         for slide in pres.slides:
-            texts = [shape.text for shape in slide.shapes if hasattr(shape, "text")]
-            pages.append("\n".join(texts))
+            texts = [s.text.strip() for s in slide.shapes if hasattr(s, "text") and s.text.strip()]
+            page = "\n".join(texts).strip()
+            if page:
+                pages.append(page)
+
         return pages
 
-    raise ValueError("Unsupported file")
-
+    raise ValueError("Unsupported file format")
 
 def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
     """
-    Chia pages thành chunks với quy tắc:
-    - Mỗi page chia thành 3 chunks (1/3 size)
-    - Nếu chunk overlap sang page khác -> gộp cả 2 pages vào metadata
-    
-    Returns:
-        List[(chunk_text, [page_ids])]
+    - Không sinh chunk rỗng
+    - Không sinh chunk quá ngắn
+    - Nối OCR text + text gốc mượt
     """
     all_chunks = []
-    
+
     for page_id, page_text in enumerate(pages):
-        if not page_text.strip():
+        if not page_text or not page_text.strip():
             continue
-            
+
         words = page_text.split()
         total_words = len(words)
-        
-        if total_words == 0:
+
+        if total_words < 20:
             continue
-        
-        # Chia page thành 3 phần
-        chunk_size = max(total_words // 3, 1)
-        
+
+        chunk_size = max(total_words // 3, 20)
+
         for i in range(3):
-            start_idx = i * chunk_size
-            
-            # Chunk cuối lấy hết phần còn lại
-            if i == 2:
-                end_idx = total_words
-            else:
-                end_idx = start_idx + chunk_size
-            
-            chunk_words = words[start_idx:end_idx]
-            
-            if not chunk_words:
+            start = i * chunk_size
+            end = total_words if i == 2 else start + chunk_size
+
+            chunk_words = words[start:end]
+            if len(chunk_words) < 20:
                 continue
-            
+
             chunk_text = " ".join(chunk_words)
-            
-            # Kiểm tra xem chunk có tràn sang page tiếp theo không
             pages_involved = [page_id]
-            
-            # Nếu là chunk cuối của page và có page tiếp theo
+
+            # Overlap sang page sau
             if i == 2 and page_id + 1 < len(pages):
                 next_page = pages[page_id + 1]
-                next_words = next_page.split()
-                
-                # Lấy thêm 20% từ đầu page tiếp theo (tràn overlap)
-                overlap_size = max(len(next_words) // 5, 10)
-                overlap_words = next_words[:overlap_size]
-                
-                if overlap_words:
-                    chunk_text += " " + " ".join(overlap_words)
-                    pages_involved.append(page_id + 1)
-            
-            all_chunks.append((chunk_text.strip(), pages_involved))
-    
+                if next_page.strip():
+                    next_words = next_page.split()
+                    overlap_size = max(len(next_words) // 5, 20)
+                    overlap_words = next_words[:overlap_size]
+
+                    if overlap_words:
+                        chunk_text += " " + " ".join(overlap_words)
+                        pages_involved.append(page_id + 1)
+
+            chunk_text = chunk_text.strip()
+            if chunk_text:
+                all_chunks.append((chunk_text, pages_involved))
+
     return all_chunks

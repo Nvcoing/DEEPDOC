@@ -9,24 +9,40 @@ from doc_knowledge.file_loader import load_file_pages, chunk_pages_smart
 from doc_knowledge.entities import extract_entities
 
 
+MIN_PAGE_CHARS = 50
+MIN_CHUNK_CHARS = 40
+
+
 class QdrantFileUploader:
     def __init__(self, client: QdrantClient = CLIENT, embed_model=embed_model):
         self.client = client
         self.embed_model = embed_model
 
+    def _safe_embed(self, texts):
+        """Embed an toàn – không cho text rỗng lọt qua"""
+        clean = [t.strip() for t in texts if t and t.strip()]
+        if not clean:
+            return None
+
+        with torch.no_grad():
+            vectors = self.embed_model.encode(
+                clean,
+                normalize_embeddings=True
+            )
+
+        if vectors is None or len(vectors) == 0:
+            return None
+
+        return vectors.tolist()
+
     def upload_file(self, file_path: str) -> str:
-        """
-        Upload file và tạo collection với chunks thông minh:
-        - Mỗi page chia 3 chunks
-        - Chunk cuối tràn sang page tiếp theo
-        """
         file_name = os.path.basename(file_path)
         collection_name = f"doc_{file_name}"
 
-        # Load pages
-        pages = load_file_pages(file_path)
-        
-        # Nếu collection tồn tại → xóa để tạo mới
+        # ---------- Load pages (đã OCR-safe ở bước trước) ----------
+        pages = [p.strip() for p in load_file_pages(file_path) if p and p.strip()]
+
+        # ---------- Reset collection ----------
         try:
             self.client.get_collection(collection_name)
             self.client.delete_collection(collection_name)
@@ -34,7 +50,6 @@ class QdrantFileUploader:
         except:
             pass
 
-        # Tạo collection
         self.client.create_collection(
             collection_name=collection_name,
             vectors_config=VectorParams(
@@ -43,95 +58,94 @@ class QdrantFileUploader:
             )
         )
 
-        # Chunk pages thông minh
+        # ---------- Chunk ----------
         chunks_with_pages = chunk_pages_smart(pages)
-        print(f"Tổng số chunks: {len(chunks_with_pages)}")
-        
-        # Tạo page points
-        page_dict = {}  # {page_id: {"text": ..., "chunks": [...]}}
-        
-        # Khởi tạo page_dict
+        print(f"Tổng số chunks raw: {len(chunks_with_pages)}")
+
+        # ---------- Page dict ----------
+        page_dict = {}
         for page_id, page_text in enumerate(pages):
-            if page_text.strip():
+            if len(page_text) >= MIN_PAGE_CHARS:
                 page_dict[page_id] = {
                     "text": page_text,
                     "chunks": []
                 }
-        
-        # Gán chunks vào pages
+
+        # ---------- Chunk processing ----------
+        valid_chunk_count = 0
+
         for chunk_id, (chunk_text, pages_involved) in enumerate(chunks_with_pages):
-            # Extract entities
+            if not chunk_text or len(chunk_text.strip()) < MIN_CHUNK_CHARS:
+                continue
+
             entities = extract_entities(chunk_text)
-            
-            # Embed chunk
-            with torch.no_grad():
-                chunk_emb = self.embed_model.encode(
-                    [chunk_text],
-                    normalize_embeddings=True
-                ).tolist()[0]
-            
+
+            emb = self._safe_embed([chunk_text])
+            if emb is None:
+                continue
+
             chunk_data = {
                 "chunk_id": chunk_id,
-                "text": chunk_text,
-                "embedding": chunk_emb,
+                "text": chunk_text.strip(),
+                "embedding": emb[0],
                 "entities": entities,
-                "pages": pages_involved  # Danh sách pages liên quan
+                "pages": pages_involved
             }
-            
-            # Gán chunk vào page đầu tiên
+
             main_page = pages_involved[0]
             if main_page in page_dict:
                 page_dict[main_page]["chunks"].append(chunk_data)
-        
-        # Tạo page points
+                valid_chunk_count += 1
+
+        # ---------- Page embedding ----------
         page_points = []
+
         for page_id, page_info in page_dict.items():
             if not page_info["chunks"]:
                 continue
-            
-            # Embed page
-            with torch.no_grad():
-                page_emb = self.embed_model.encode(
-                    [page_info["text"]],
-                    normalize_embeddings=True
-                ).tolist()[0]
-            
+
+            page_emb = self._safe_embed([page_info["text"]])
+            if page_emb is None:
+                continue
+
             page_points.append(
                 PointStruct(
                     id=str(uuid.uuid4()),
-                    vector=page_emb,
+                    vector=page_emb[0],
                     payload={
-                        "text": page_info["text"],
                         "type": "page",
                         "page": page_id,
-                        "chunks": page_info["chunks"]
+                        "text": page_info["text"],
+                        "chunks": page_info["chunks"],
+                        "chunk_count": len(page_info["chunks"])
                     }
                 )
             )
 
-        # Upsert
+        # ---------- Upsert ----------
         if page_points:
             self.client.upsert(
                 collection_name=collection_name,
                 points=page_points
             )
-            print(f"Đã upload '{file_name}' với {len(page_points)} pages, {len(chunks_with_pages)} chunks")
+            print(
+                f"Upload xong '{file_name}': "
+                f"{len(page_points)} pages, "
+                f"{valid_chunk_count} valid chunks"
+            )
         else:
-            print("Không có page nào được upload")
-        
+            print("❌ Không có page hợp lệ để upload")
+
         return collection_name
 
     def list_collections(self):
-        """Liệt kê tất cả collections"""
         try:
-            collections = self.client.get_collections().collections
-            return [c.name for c in collections]
+            return [c.name for c in self.client.get_collections().collections]
         except Exception as e:
             print(f"Error listing collections: {e}")
             return []
 
     def load_collection(self, collection_name: str):
-        """Load collection có sẵn"""
         try:
             self.client.get_collection(collection_name)
             print(f"Load collection: {collection_name}")
@@ -141,7 +155,6 @@ class QdrantFileUploader:
             return None
 
     def delete_collection(self, name: str) -> bool:
-        """Xóa collection"""
         collection_name = name if name.startswith("doc_") else f"doc_{name}"
         try:
             self.client.get_collection(collection_name)

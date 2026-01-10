@@ -10,7 +10,8 @@ def query_document(
     query: str,
     top_chunk=3,
     top_page=5,
-    score_threshold=0.7
+    chunk_score_threshold=0.7,
+    page_score_threshold=0.5,
 ) -> SearchResultAccessor:
 
     collections = []
@@ -29,9 +30,10 @@ def query_document(
     # ===== 2. Search multi-collection =====
     searcher = DOCSearcher(
         collections=collections,
-        top_chunk=top_chunk, 
-        top_page=top_page, 
-        score_threshold=score_threshold
+        top_chunk=top_chunk,
+        top_page=top_page,
+        chunk_score_threshold=chunk_score_threshold,
+        page_score_threshold=page_score_threshold,
     )
 
     results = searcher.search(query)
