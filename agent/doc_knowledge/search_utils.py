@@ -11,7 +11,7 @@ class DOCSearcher:
     def __init__(
         self,
         collections: List[str],
-        top_chunk: int = 3,
+        top_chunk: int = 5,
         top_page: int = 5,
         page_score_threshold: float = 0.5,
         chunk_score_threshold: float = 0.7,
