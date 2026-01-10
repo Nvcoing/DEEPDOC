@@ -1,25 +1,56 @@
-from typing import List
+from typing import List, Tuple
+import os
+import shutil
+
 from pypdf import PdfReader
 from docx import Document
 from pptx import Presentation
-from typing import List, Tuple
+
 import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
-import os
 
+
+# ================= CONFIG =================
 
 OCR_LANGS = "vie+eng+chi_sim+chi_tra+jpn+kor"
 
 
-def ocr_image(image: Image.Image) -> str:
-    text = pytesseract.image_to_string(image, lang=OCR_LANGS)
-    return text.strip()
+# ================= POPPLER AUTO =================
 
+def get_poppler_path() -> str | None:
+    """
+    100% tự động:
+    - ENV POPPLER_PATH (nếu có)
+    - PATH system (pdfinfo / pdftoppm)
+    Không hard-code bất kỳ path nào
+    """
+    env_path = os.getenv("POPPLER_PATH")
+    if env_path and shutil.which("pdfinfo", path=env_path):
+        return env_path
+
+    for exe in ("pdfinfo", "pdftoppm"):
+        exe_path = shutil.which(exe)
+        if exe_path:
+            return os.path.dirname(exe_path)
+
+    return None
+
+
+POPPLER_PATH = get_poppler_path()
+
+
+# ================= OCR =================
+
+def ocr_image(image: Image.Image) -> str:
+    return pytesseract.image_to_string(image, lang=OCR_LANGS).strip()
+
+
+# ================= LOAD FILE =================
 
 def load_file_pages(path: str) -> List[str]:
     ext = path.split('.')[-1].lower()
-    pages = []
+    pages: List[str] = []
 
     # -------- PDF --------
     if ext == "pdf":
@@ -30,10 +61,19 @@ def load_file_pages(path: str) -> List[str]:
 
             # Nếu page không có text → OCR
             if not text:
-                images = convert_from_path(path, first_page=page_id+1, last_page=page_id+1)
-                if images:
-                    ocr_text = ocr_image(images[0])
-                    text = ocr_text
+                try:
+                    images = convert_from_path(
+                        path,
+                        dpi=200,
+                        first_page=page_id + 1,
+                        last_page=page_id + 1,
+                        poppler_path=POPPLER_PATH
+                    )
+                    if images:
+                        text = ocr_image(images[0])
+                except Exception as e:
+                    print(f"[WARN] OCR failed page {page_id + 1}: {e}")
+                    text = ""
 
             if text:
                 pages.append(text)
@@ -68,14 +108,21 @@ def load_file_pages(path: str) -> List[str]:
         pres = Presentation(path)
 
         for slide in pres.slides:
-            texts = [s.text.strip() for s in slide.shapes if hasattr(s, "text") and s.text.strip()]
+            texts = [
+                s.text.strip()
+                for s in slide.shapes
+                if hasattr(s, "text") and s.text.strip()
+            ]
             page = "\n".join(texts).strip()
             if page:
                 pages.append(page)
 
         return pages
 
-    raise ValueError("Unsupported file format")
+    raise ValueError(f"Unsupported file format: {ext}")
+
+
+# ================= CHUNKING =================
 
 def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
     """
@@ -83,7 +130,7 @@ def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
     - Không sinh chunk quá ngắn
     - Nối OCR text + text gốc mượt
     """
-    all_chunks = []
+    all_chunks: List[Tuple[str, List[int]]] = []
 
     for page_id, page_text in enumerate(pages):
         if not page_text or not page_text.strip():
