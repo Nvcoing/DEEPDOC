@@ -1,5 +1,5 @@
 
-print()from handler.retrieval import query_document
+from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
 from handler.router import QueryRouter
 from typing import List
