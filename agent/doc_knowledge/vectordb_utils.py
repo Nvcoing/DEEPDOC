@@ -19,7 +19,6 @@ class QdrantFileUploader:
         self.embed_model = embed_model
 
     def _safe_embed(self, texts):
-        """Embed an toàn – không cho text rỗng lọt qua"""
         clean = [t.strip() for t in texts if t and t.strip()]
         if not clean:
             return None
@@ -39,14 +38,31 @@ class QdrantFileUploader:
         file_name = os.path.basename(file_path)
         collection_name = f"doc_{file_name}"
 
-        # ---------- Load pages (đã OCR-safe ở bước trước) ----------
-        pages = [p.strip() for p in load_file_pages(file_path) if p and p.strip()]
+        print("=" * 80)
+        print(f"📄 Upload file: {file_name}")
+
+        # ---------- Load pages ----------
+        pages_raw = load_file_pages(file_path)
+        print(f"🔹 Pages raw: {len(pages_raw)}")
+
+        pages = []
+        for i, p in enumerate(pages_raw):
+            if p and p.strip():
+                pages.append(p.strip())
+                print(f"\n--- PAGE {i} (len={len(p.strip())}) ---")
+                print(p.strip()[:500])
+            else:
+                print(f"\n--- PAGE {i} EMPTY ---")
+
+        if not pages:
+            print("❌ Không có page nào sau khi load")
+            return collection_name
 
         # ---------- Reset collection ----------
         try:
             self.client.get_collection(collection_name)
             self.client.delete_collection(collection_name)
-            print(f"Collection '{collection_name}' đã tồn tại, xóa và tạo mới...")
+            print(f"⚠️ Collection '{collection_name}' đã tồn tại, xóa và tạo mới")
         except:
             pass
 
@@ -59,8 +75,14 @@ class QdrantFileUploader:
         )
 
         # ---------- Chunk ----------
-        chunks_with_pages = chunk_pages_smart(pages, chunk_size=300, overlap=50)
-        print(f"Tổng số chunks raw: {len(chunks_with_pages)}")
+        chunks_with_pages = chunk_pages_smart(
+            pages,
+            chunk_size=300,
+            overlap=50
+        )
+
+        print("\n" + "=" * 80)
+        print(f"🧩 Tổng chunks raw: {len(chunks_with_pages)}")
 
         # ---------- Page dict ----------
         page_dict = {}
@@ -70,18 +92,26 @@ class QdrantFileUploader:
                     "text": page_text,
                     "chunks": []
                 }
+            else:
+                print(f"⚠️ Page {page_id} bị loại (len={len(page_text)})")
 
         # ---------- Chunk processing ----------
         valid_chunk_count = 0
 
         for chunk_id, (chunk_text, pages_involved) in enumerate(chunks_with_pages):
             if not chunk_text or len(chunk_text.strip()) < MIN_CHUNK_CHARS:
+                print(f"⚠️ Chunk {chunk_id} bị loại (len nhỏ)")
                 continue
+
+            print(f"\n--- CHUNK {chunk_id} ---")
+            print(f"Pages involved: {pages_involved}")
+            print(chunk_text[:500])
 
             entities = extract_entities(chunk_text)
 
             emb = self._safe_embed([chunk_text])
             if emb is None:
+                print("❌ Embed chunk fail")
                 continue
 
             chunk_data = {
@@ -96,16 +126,27 @@ class QdrantFileUploader:
             if main_page in page_dict:
                 page_dict[main_page]["chunks"].append(chunk_data)
                 valid_chunk_count += 1
+            else:
+                print(f"⚠️ Chunk {chunk_id} map tới page không hợp lệ")
+
+        print("\n" + "=" * 80)
+        print(f"✅ Valid chunks: {valid_chunk_count}")
 
         # ---------- Page embedding ----------
         page_points = []
 
         for page_id, page_info in page_dict.items():
             if not page_info["chunks"]:
+                print(f"⚠️ Page {page_id} không có chunk hợp lệ")
                 continue
+
+            print(f"\n=== PAGE {page_id} FINAL ===")
+            print(page_info["text"][:500])
+            print(f"Chunks: {len(page_info['chunks'])}")
 
             page_emb = self._safe_embed([page_info["text"]])
             if page_emb is None:
+                print("❌ Embed page fail")
                 continue
 
             page_points.append(
@@ -123,44 +164,18 @@ class QdrantFileUploader:
             )
 
         # ---------- Upsert ----------
+        print("\n" + "=" * 80)
         if page_points:
             self.client.upsert(
                 collection_name=collection_name,
                 points=page_points
             )
             print(
-                f"Upload xong '{file_name}': "
+                f"🎉 Upload xong '{file_name}': "
                 f"{len(page_points)} pages, "
-                f"{valid_chunk_count} valid chunks"
+                f"{valid_chunk_count} chunks"
             )
         else:
             print("❌ Không có page hợp lệ để upload")
 
         return collection_name
-
-    def list_collections(self):
-        try:
-            return [c.name for c in self.client.get_collections().collections]
-        except Exception as e:
-            print(f"Error listing collections: {e}")
-            return []
-
-    def load_collection(self, collection_name: str):
-        try:
-            self.client.get_collection(collection_name)
-            print(f"Load collection: {collection_name}")
-            return collection_name
-        except:
-            print(f"Collection '{collection_name}' does not exist.")
-            return None
-
-    def delete_collection(self, name: str) -> bool:
-        collection_name = name if name.startswith("doc_") else f"doc_{name}"
-        try:
-            self.client.get_collection(collection_name)
-            self.client.delete_collection(collection_name)
-            print(f"Deleted collection: {collection_name}")
-            return True
-        except Exception as e:
-            print(f"Failed to delete collection {collection_name}: {e}")
-            return False
