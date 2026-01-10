@@ -1,86 +1,119 @@
-from typing import List, Dict
-import fitz  # PyMuPDF
+from typing import List, Dict, Tuple
+from pypdf import PdfReader
+from docx import Document
+from pptx import Presentation
 
 
-# =========================================================
-# LOAD PDF → PAGE TEXT (NO OCR)
-# =========================================================
+# ================= LOAD FILE =================
 
-def load_file_pages(pdf_path: str) -> List[Dict]:
+def load_file_pages(path: str) -> List[Dict]:
     """
-    Load PDF text layer only.
-    - Không OCR
-    - Không Poppler
-    - Không phụ thuộc native lib
-    - PDF scan (ảnh) → bỏ qua page
+    Output:
+    [
+        {
+            "page_id": int,
+            "text": str
+        }
+    ]
     """
+    ext = path.split(".")[-1].lower()
     pages: List[Dict] = []
 
-    doc = fitz.open(pdf_path)
-    total_pages = len(doc)
+    # ---------- PDF ----------
+    if ext == "pdf":
+        reader = PdfReader(path)
 
-    print(f"[INFO] Total pages: {total_pages}")
+        for i, page in enumerate(reader.pages):
+            text = (page.extract_text() or "").strip()
+            if text:
+                pages.append({
+                    "page_id": i,
+                    "text": text
+                })
+        return pages
 
-    for page_index in range(total_pages):
-        page = doc[page_index]
-        text = page.get_text("text").strip()
+    # ---------- DOCX ----------
+    if ext == "docx":
+        doc = Document(path)
+        buf = []
+        page_id = 0
 
-        if not text:
-            print(f"[WARN] Page {page_index + 1} has NO text layer → skipped")
-            continue
+        for para in doc.paragraphs:
+            if para.text.strip():
+                buf.append(para.text.strip())
 
-        print(f"[DEBUG] Page {page_index + 1} text length: {len(text)}")
+            if len(buf) >= 20:
+                pages.append({
+                    "page_id": page_id,
+                    "text": "\n".join(buf)
+                })
+                buf = []
+                page_id += 1
 
-        pages.append({
-            "page_id": page_index + 1,
-            "text": text
-        })
+        if buf:
+            pages.append({
+                "page_id": page_id,
+                "text": "\n".join(buf)
+            })
 
-    doc.close()
+        return pages
 
-    if not pages:
-        print("❌ Không có page hợp lệ để upload")
+    # ---------- PPTX ----------
+    if ext == "pptx":
+        pres = Presentation(path)
 
-    return pages
+        for i, slide in enumerate(pres.slides):
+            texts = [
+                s.text.strip()
+                for s in slide.shapes
+                if hasattr(s, "text") and s.text.strip()
+            ]
+            if texts:
+                pages.append({
+                    "page_id": i,
+                    "text": "\n".join(texts)
+                })
+        return pages
+
+    raise ValueError(f"Unsupported file format: {ext}")
 
 
-# =========================================================
-# CHUNKING
-# =========================================================
+# ================= CHUNKING =================
 
 def chunk_pages_smart(
     pages: List[Dict],
-    chunk_size: int = 300,
-    overlap: int = 50
+    min_words: int = 40
 ) -> List[Dict]:
     """
-    Chunk text theo sliding window
-    - Không sinh chunk rỗng
-    - Có overlap để giữ context
+    Output chunk format:
+    {
+        "chunk_text": str,
+        "page_ids": [int]
+    }
     """
     chunks: List[Dict] = []
 
     for page in pages:
-        words = page["text"].split()
-        if not words:
+        page_id = page["page_id"]
+        text = page["text"].strip()
+
+        words = text.split()
+        if len(words) < min_words:
             continue
 
-        start = 0
-        while start < len(words):
-            end = start + chunk_size
-            chunk_words = words[start:end]
+        chunk_size = max(len(words) // 3, min_words)
 
-            if len(chunk_words) < 20:
-                break
+        for i in range(3):
+            start = i * chunk_size
+            end = len(words) if i == 2 else start + chunk_size
+            part = words[start:end]
 
-            chunk_text = " ".join(chunk_words)
+            if len(part) < min_words:
+                continue
 
             chunks.append({
-                "page_id": page["page_id"],
-                "text": chunk_text
+                "chunk_text": " ".join(part),
+                "page_ids": [page_id]
             })
 
-            start = end - overlap
-
-    print(f"[INFO] Total chunks created: {len(chunks)}")
     return chunks
