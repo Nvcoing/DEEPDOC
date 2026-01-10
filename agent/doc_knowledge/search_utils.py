@@ -4,10 +4,8 @@ from qdrant_client.models import Filter, FieldCondition, MatchValue
 from doc_knowledge.entities import extract_entities, highlight_markdown
 from doc_knowledge.config import embed_model, rank_model, device, CLIENT
 
-
 def fingerprint(text: str) -> str:
     return hashlib.md5(text.strip().encode("utf-8")).hexdigest()
-
 
 class DOCSearcher:
     def __init__(
@@ -25,19 +23,12 @@ class DOCSearcher:
         self.chunk_score_threshold = chunk_score_threshold
 
     def search(self, query: str):
-        # ======================================================
-        # 0️⃣ EMBED QUERY
-        # ======================================================
+        # 0️⃣ Embed query
         with torch.no_grad():
-            q_emb = embed_model.encode(
-                [query], normalize_embeddings=True
-            ).tolist()[0]
+            q_emb = embed_model.encode([query], normalize_embeddings=True).tolist()[0]
 
-        # ======================================================
-        # 1️⃣ SEARCH PAGE
-        # ======================================================
+        # 1️⃣ Search page
         page_candidates = []
-
         for col in self.collections:
             res = CLIENT.search(
                 collection_name=col,
@@ -54,12 +45,9 @@ class DOCSearcher:
         if not page_candidates:
             return [{"no_result": True}]
 
-        # ======================================================
-        # 2️⃣ DEDUP PAGE
-        # ======================================================
+        # 2️⃣ Dedup page
         seen = set()
         unique_pages = []
-
         for col, p in page_candidates:
             pid = p.payload.get("page")
             key = f"{col}:{pid}"
@@ -68,9 +56,7 @@ class DOCSearcher:
             seen.add(key)
             unique_pages.append((col, p))
 
-        # ======================================================
-        # 3️⃣ RERANK PAGE
-        # ======================================================
+        # 3️⃣ Rerank page
         page_texts = [p.payload.get("text", "") for _, p in unique_pages]
         page_pairs = [(query, t) for t in page_texts]
         page_scores = rank_model.predict(page_pairs, batch_size=4)
@@ -90,15 +76,11 @@ class DOCSearcher:
         if not ranked_pages:
             return [{"no_result": True}]
 
-        # ======================================================
-        # 4️⃣ RERANK CHUNK → FLATTEN
-        # ======================================================
+        # 4️⃣ Rerank chunk trong page
         flat_chunks = []
-        global_rank = 1
 
         for col, page_point, page_score in ranked_pages:
             pid = page_point.payload["page"]
-            page_text = page_point.payload.get("text", "")
             chunks = page_point.payload.get("chunks", [])
 
             seen_chunk = set()
@@ -126,34 +108,32 @@ class DOCSearcher:
                 reverse=True
             )
 
+            # Add to flat_chunks (không break, flatten tất cả)
             for t, s in ranked_chunks:
-                if float(s) < self.chunk_score_threshold:
-                    continue
+                if float(s) >= self.chunk_score_threshold:
+                    flat_chunks.append({
+                        "rank": len(flat_chunks) + 1,
+                        "score": round(float(s), 4),
+                        "text": t,
+                        "highlighted_text": highlight_markdown(t, extract_entities(t)),
+                        "entities": extract_entities(t),
+                        "pages": [{"collection": col, "page": pid + 1}],
+                        "is_merged": False
+                    })
 
-                flat_chunks.append({
-                    "rank": global_rank,
-                    "score": round(float(s), 4),
-                    "text": t,
-                    "highlighted_text": highlight_markdown(
-                        t, extract_entities(t)
-                    ),
-                    "entities": extract_entities(t),
-                    "pages": [{
-                        "collection": col,
-                        "page": pid + 1
-                    }],
-                    "is_merged": False
-                })
+        # 5️⃣ Giữ đúng top_chunk
+        flat_chunks = flat_chunks[:self.top_chunk]
 
-                global_rank += 1
-                if global_rank > self.top_chunk:
-                    break
+        # 6️⃣ DEBUG: In ra chunk khi search
+        print("\n========== DEBUG SEARCH CHUNKS ==========")
+        for c in flat_chunks:
+            print(f"[CHUNK {c['rank']}] Score: {c['score']}")
+            print(c["highlighted_text"][:300])
+        print("=========================================\n")
 
-        if not flat_chunks:
-            return [{"no_result": True}]
-
+        # 7️⃣ Clear memory
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
 
-        return flat_chunks
+        return flat_chunks if flat_chunks else [{"no_result": True}]
