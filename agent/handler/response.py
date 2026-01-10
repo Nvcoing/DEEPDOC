@@ -59,7 +59,6 @@ def answer(question: str, file_names: List[str]) -> str:
 
     QUESTION:
     <<<BEGIN_QUESTION>>>
-    print()
     {question}
     <<<END_QUESTION>>>
     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
