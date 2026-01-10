@@ -1,19 +1,22 @@
 from typing import List, Tuple
 import os
 import shutil
-
 from pypdf import PdfReader
 from docx import Document
 from pptx import Presentation
-
-import pytesseract
 from pdf2image import convert_from_path
 from PIL import Image
+from paddleocr import PaddleOCR
 
 
 # ================= CONFIG =================
 
-OCR_LANGS = "vie+eng+chi_sim+chi_tra+jpn+kor"
+# PaddleOCR auto multi-language
+OCR = PaddleOCR(
+    use_angle_cls=True,
+    lang="multi",      # tự động detect ngôn ngữ
+    show_log=False
+)
 
 
 # ================= POPPLER AUTO =================
@@ -21,9 +24,8 @@ OCR_LANGS = "vie+eng+chi_sim+chi_tra+jpn+kor"
 def get_poppler_path() -> str | None:
     """
     100% tự động:
-    - ENV POPPLER_PATH (nếu có)
+    - ENV POPPLER_PATH
     - PATH system (pdfinfo / pdftoppm)
-    Không hard-code bất kỳ path nào
     """
     env_path = os.getenv("POPPLER_PATH")
     if env_path and shutil.which("pdfinfo", path=env_path):
@@ -43,7 +45,18 @@ POPPLER_PATH = get_poppler_path()
 # ================= OCR =================
 
 def ocr_image(image: Image.Image) -> str:
-    return pytesseract.image_to_string(image, lang=OCR_LANGS).strip()
+    """
+    PaddleOCR expects numpy array or image path
+    """
+    result = OCR.ocr(image, cls=True)
+
+    texts = []
+    for line in result or []:
+        for box, (text, score) in line:
+            if score >= 0.5 and text.strip():
+                texts.append(text.strip())
+
+    return "\n".join(texts)
 
 
 # ================= LOAD FILE =================
@@ -64,7 +77,7 @@ def load_file_pages(path: str) -> List[str]:
                 try:
                     images = convert_from_path(
                         path,
-                        dpi=200,
+                        dpi=250,
                         first_page=page_id + 1,
                         last_page=page_id + 1,
                         poppler_path=POPPLER_PATH
@@ -133,7 +146,7 @@ def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
     all_chunks: List[Tuple[str, List[int]]] = []
 
     for page_id, page_text in enumerate(pages):
-        if not page_text or not page_text.strip():
+        if not page_text.strip():
             continue
 
         words = page_text.split()
@@ -157,18 +170,11 @@ def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
 
             # Overlap sang page sau
             if i == 2 and page_id + 1 < len(pages):
-                next_page = pages[page_id + 1]
-                if next_page.strip():
-                    next_words = next_page.split()
-                    overlap_size = max(len(next_words) // 5, 20)
-                    overlap_words = next_words[:overlap_size]
+                next_words = pages[page_id + 1].split()
+                overlap_size = max(len(next_words) // 5, 20)
+                chunk_text += " " + " ".join(next_words[:overlap_size])
+                pages_involved.append(page_id + 1)
 
-                    if overlap_words:
-                        chunk_text += " " + " ".join(overlap_words)
-                        pages_involved.append(page_id + 1)
-
-            chunk_text = chunk_text.strip()
-            if chunk_text:
-                all_chunks.append((chunk_text, pages_involved))
+            all_chunks.append((chunk_text.strip(), pages_involved))
 
     return all_chunks
