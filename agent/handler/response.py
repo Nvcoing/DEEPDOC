@@ -17,13 +17,19 @@ def answer(question: str, file_names: List[str]) -> str:
 
             UPLOADED_DOCUMENT:
             <<<BEGIN_DOCUMENT>>>
-            Khong co thong tin
+            Câu hỏi không liên quan đến truy xuất tài liệu
             <<<END_DOCUMENT>>>
 
             QUESTION:
             <<<BEGIN_QUESTION>>>
             {question}
             <<<END_QUESTION>>>
+
+            INSTRUCTIONS:
+            - If the question is related to the document, answer using only information from the document.
+            - If the question is unrelated or outside the scope of the document, respond exactly with the content in the UPLOADED_DOCUMENT section above.
+            - Do not guess or invent information not present in the document.
+
             <|eot_id|><|start_header_id|>assistant<|end_header_id|>
             """
         return final_prompt.strip()
@@ -55,15 +61,16 @@ def answer(question: str, file_names: List[str]) -> str:
     context_text = "\n\n".join(context_blocks)
     # ===== FINAL PROMPT =====
     final_prompt = f"""
-        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
         You are a professional document reading assistant.
 
         TASK:
-        Carefully read the uploaded document text and answer the question with
-        detailed, complete, and accurate information.
-        DO NOT make up information that is not in the document.
+        1. Carefully read the entire content of the provided document.
+        2. Answer the question **based entirely on the content of the document**.
+        3. If the information is not present in the document, respond: "The information is not found in the document."
+        4. When possible, quote the exact sentence or passage from the document to support your answer.
+        5. Respond in the **same language as the document**, do not use any other language.
 
-        UPLOADED_DOCUMENT:
+        DOCUMENT:
         <<<BEGIN_DOCUMENT>>>
         {context_text}
         <<<END_DOCUMENT>>>
@@ -72,7 +79,12 @@ def answer(question: str, file_names: List[str]) -> str:
         <<<BEGIN_QUESTION>>>
         {question}
         <<<END_QUESTION>>>
-        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+
+        ANSWER GUIDELINES:
+        - Provide a complete, detailed, and accurate answer.
+        - Always rely on information from the document.
+        - Do not add any external knowledge.
+        - Cite specific parts of the document whenever possible.
         """
 
     print(final_prompt)
