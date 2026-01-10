@@ -1,4 +1,5 @@
-from handler.retrieval import query_document
+
+print()from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
 from handler.router import QueryRouter
 from typing import List
@@ -58,8 +59,10 @@ def answer(question: str, file_names: List[str]) -> str:
 
     QUESTION:
     <<<BEGIN_QUESTION>>>
+    print()
     {question}
     <<<END_QUESTION>>>
     <|eot_id|><|start_header_id|>assistant<|end_header_id|>
     """
+    print(final_prompt)
     return final_prompt.strip()
