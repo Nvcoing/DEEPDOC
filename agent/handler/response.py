@@ -35,7 +35,7 @@ def answer(question: str, file_names: List[str]) -> str:
         file_paths=file_paths,
         query=question,
         top_chunk=5,
-        top_page=5,
+        top_page=20,
         chunk_score_threshold=0.7,
         page_score_threshold=0.5,
     )
