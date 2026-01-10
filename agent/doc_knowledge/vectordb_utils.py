@@ -59,7 +59,7 @@ class QdrantFileUploader:
         )
 
         # ---------- Chunk ----------
-        chunks_with_pages = chunk_pages_smart(pages)
+        chunks_with_pages = chunk_pages_smart(pages, chunk_size=300, overlap=50)
         print(f"Tổng số chunks raw: {len(chunks_with_pages)}")
 
         # ---------- Page dict ----------

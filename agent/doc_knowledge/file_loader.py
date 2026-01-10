@@ -1,180 +1,86 @@
-from typing import List, Tuple
-import os
-import shutil
-from pypdf import PdfReader
-from docx import Document
-from pptx import Presentation
-from pdf2image import convert_from_path
-from PIL import Image
-from paddleocr import PaddleOCR
+from typing import List, Dict
+import fitz  # PyMuPDF
 
 
-# ================= CONFIG =================
+# =========================================================
+# LOAD PDF → PAGE TEXT (NO OCR)
+# =========================================================
 
-# PaddleOCR auto multi-language
-OCR = PaddleOCR(
-    use_angle_cls=True,
-    lang="multi",      # tự động detect ngôn ngữ
-    show_log=False
-)
-
-
-# ================= POPPLER AUTO =================
-
-def get_poppler_path() -> str | None:
+def load_file_pages(pdf_path: str) -> List[Dict]:
     """
-    100% tự động:
-    - ENV POPPLER_PATH
-    - PATH system (pdfinfo / pdftoppm)
+    Load PDF text layer only.
+    - Không OCR
+    - Không Poppler
+    - Không phụ thuộc native lib
+    - PDF scan (ảnh) → bỏ qua page
     """
-    env_path = os.getenv("POPPLER_PATH")
-    if env_path and shutil.which("pdfinfo", path=env_path):
-        return env_path
+    pages: List[Dict] = []
 
-    for exe in ("pdfinfo", "pdftoppm"):
-        exe_path = shutil.which(exe)
-        if exe_path:
-            return os.path.dirname(exe_path)
+    doc = fitz.open(pdf_path)
+    total_pages = len(doc)
 
-    return None
+    print(f"[INFO] Total pages: {total_pages}")
+
+    for page_index in range(total_pages):
+        page = doc[page_index]
+        text = page.get_text("text").strip()
+
+        if not text:
+            print(f"[WARN] Page {page_index + 1} has NO text layer → skipped")
+            continue
+
+        print(f"[DEBUG] Page {page_index + 1} text length: {len(text)}")
+
+        pages.append({
+            "page_id": page_index + 1,
+            "text": text
+        })
+
+    doc.close()
+
+    if not pages:
+        print("❌ Không có page hợp lệ để upload")
+
+    return pages
 
 
-POPPLER_PATH = get_poppler_path()
+# =========================================================
+# CHUNKING
+# =========================================================
 
-
-# ================= OCR =================
-
-def ocr_image(image: Image.Image) -> str:
+def chunk_pages_smart(
+    pages: List[Dict],
+    chunk_size: int = 300,
+    overlap: int = 50
+) -> List[Dict]:
     """
-    PaddleOCR expects numpy array or image path
-    """
-    result = OCR.ocr(image, cls=True)
-
-    texts = []
-    for line in result or []:
-        for box, (text, score) in line:
-            if score >= 0.5 and text.strip():
-                texts.append(text.strip())
-
-    return "\n".join(texts)
-
-
-# ================= LOAD FILE =================
-
-def load_file_pages(path: str) -> List[str]:
-    ext = path.split('.')[-1].lower()
-    pages: List[str] = []
-
-    # -------- PDF --------
-    if ext == "pdf":
-        reader = PdfReader(path)
-
-        for page_id, page in enumerate(reader.pages):
-            text = (page.extract_text() or "").strip()
-
-            # Nếu page không có text → OCR
-            if not text:
-                try:
-                    images = convert_from_path(
-                        path,
-                        dpi=250,
-                        first_page=page_id + 1,
-                        last_page=page_id + 1,
-                        poppler_path=POPPLER_PATH
-                    )
-                    if images:
-                        text = ocr_image(images[0])
-                except Exception as e:
-                    print(f"[WARN] OCR failed page {page_id + 1}: {e}")
-                    text = ""
-
-            if text:
-                pages.append(text)
-
-        return pages
-
-    # -------- DOCX --------
-    if ext == "docx":
-        doc = Document(path)
-        buf, cnt = [], 0
-
-        for para in doc.paragraphs:
-            if para.text.strip():
-                buf.append(para.text.strip())
-                cnt += 1
-
-            if cnt >= 20:
-                page = "\n".join(buf).strip()
-                if page:
-                    pages.append(page)
-                buf, cnt = [], 0
-
-        if buf:
-            page = "\n".join(buf).strip()
-            if page:
-                pages.append(page)
-
-        return pages
-
-    # -------- PPTX --------
-    if ext == "pptx":
-        pres = Presentation(path)
-
-        for slide in pres.slides:
-            texts = [
-                s.text.strip()
-                for s in slide.shapes
-                if hasattr(s, "text") and s.text.strip()
-            ]
-            page = "\n".join(texts).strip()
-            if page:
-                pages.append(page)
-
-        return pages
-
-    raise ValueError(f"Unsupported file format: {ext}")
-
-
-# ================= CHUNKING =================
-
-def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
-    """
+    Chunk text theo sliding window
     - Không sinh chunk rỗng
-    - Không sinh chunk quá ngắn
-    - Nối OCR text + text gốc mượt
+    - Có overlap để giữ context
     """
-    all_chunks: List[Tuple[str, List[int]]] = []
+    chunks: List[Dict] = []
 
-    for page_id, page_text in enumerate(pages):
-        if not page_text.strip():
+    for page in pages:
+        words = page["text"].split()
+        if not words:
             continue
 
-        words = page_text.split()
-        total_words = len(words)
-
-        if total_words < 20:
-            continue
-
-        chunk_size = max(total_words // 3, 20)
-
-        for i in range(3):
-            start = i * chunk_size
-            end = total_words if i == 2 else start + chunk_size
-
+        start = 0
+        while start < len(words):
+            end = start + chunk_size
             chunk_words = words[start:end]
+
             if len(chunk_words) < 20:
-                continue
+                break
 
             chunk_text = " ".join(chunk_words)
-            pages_involved = [page_id]
 
-            # Overlap sang page sau
-            if i == 2 and page_id + 1 < len(pages):
-                next_words = pages[page_id + 1].split()
-                overlap_size = max(len(next_words) // 5, 20)
-                chunk_text += " " + " ".join(next_words[:overlap_size])
-                pages_involved.append(page_id + 1)
+            chunks.append({
+                "page_id": page["page_id"],
+                "text": chunk_text
+            })
 
-            all_chunks.append((chunk_text.strip(), pages_involved))
+            start = end - overlap
 
-    return all_chunks
+    print(f"[INFO] Total chunks created: {len(chunks)}")
+    return chunks
