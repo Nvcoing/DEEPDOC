@@ -1,4 +1,3 @@
-
 from handler.retrieval import query_document
 from doc_knowledge.config import COLLECTIONS
 from handler.router import QueryRouter
@@ -13,23 +12,23 @@ def answer(question: str, file_names: List[str]) -> str:
     # ===== OUT OF SCOPE =====
     if route_result["label"] != "naval_warship":
         final_prompt = f"""
-    <|begin_of_text|><|start_header_id|>user<|end_header_id|>
-    You are a professional document reading assistant.
+            <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+            You are a professional document reading assistant.
 
-    UPLOADED_DOCUMENT:
-    <<<BEGIN_DOCUMENT>>>
-    Khong co thong tin
-    <<<END_DOCUMENT>>>
+            UPLOADED_DOCUMENT:
+            <<<BEGIN_DOCUMENT>>>
+            Khong co thong tin
+            <<<END_DOCUMENT>>>
 
-    QUESTION:
-    <<<BEGIN_QUESTION>>>
-    {question}
-    <<<END_QUESTION>>>
-    <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-    """
+            QUESTION:
+            <<<BEGIN_QUESTION>>>
+            {question}
+            <<<END_QUESTION>>>
+            <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+            """
         return final_prompt.strip()
 
-    # ===== IN SCOPE (NAVAL WARSHIP) =====
+    # ===== IN SCOPE =====
     file_paths = [COLLECTIONS + name for name in file_names]
 
     acc = query_document(
@@ -41,27 +40,40 @@ def answer(question: str, file_names: List[str]) -> str:
         page_score_threshold=0.5,
     )
 
+    # ===== BUILD DOCUMENT CONTEXT =====
+    context_blocks = []
+
+    if acc.is_no_result():
+        context_blocks.append("Khong tim thay thong tin lien quan trong tai lieu.")
+    else:
+        for chunk in acc.get_all_chunks():
+            rank = chunk["rank"]
+            context_blocks.append(
+                f"[CHUNK {rank}]\n{chunk['highlighted_text']}"
+            )
+
+    context_text = "\n\n".join(context_blocks)
+    # ===== FINAL PROMPT =====
     final_prompt = f"""
-    <|begin_of_text|><|start_header_id|>user<|end_header_id|>
-    You are a professional document reading assistant.
+        <|begin_of_text|><|start_header_id|>user<|end_header_id|>
+        You are a professional document reading assistant.
 
-    TASK:
-    Carefully read the uploaded document text and answer the question with detailed, complete, and accurate information.
+        TASK:
+        Carefully read the uploaded document text and answer the question with
+        detailed, complete, and accurate information.
+        DO NOT make up information that is not in the document.
 
-    UPLOADED_DOCUMENT:
-    <<<BEGIN_DOCUMENT>>>
-    {acc.get_chunk_highlighted(1)}
+        UPLOADED_DOCUMENT:
+        <<<BEGIN_DOCUMENT>>>
+        {context_text}
+        <<<END_DOCUMENT>>>
 
-    {acc.get_chunk_highlighted(2)}
+        QUESTION:
+        <<<BEGIN_QUESTION>>>
+        {question}
+        <<<END_QUESTION>>>
+        <|eot_id|><|start_header_id|>assistant<|end_header_id|>
+        """
 
-    {acc.get_chunk_highlighted(3)}
-    <<<END_DOCUMENT>>>
-
-    QUESTION:
-    <<<BEGIN_QUESTION>>>
-    {question}
-    <<<END_QUESTION>>>
-    <|eot_id|><|start_header_id|>assistant<|end_header_id|>
-    """
     print(final_prompt)
     return final_prompt.strip()

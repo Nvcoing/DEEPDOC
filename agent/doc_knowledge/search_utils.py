@@ -34,7 +34,7 @@ class DOCSearcher:
             ).tolist()[0]
 
         # ======================================================
-        # 1️⃣ SEARCH PAGE (ALL COLLECTIONS)
+        # 1️⃣ SEARCH PAGE
         # ======================================================
         page_candidates = []
 
@@ -45,40 +45,34 @@ class DOCSearcher:
                 query_filter=Filter(
                     must=[FieldCondition(key="type", match=MatchValue(value="page"))]
                 ),
-                limit=self.top_page * 3,  # recall rộng
+                limit=self.top_page * 3,
                 with_payload=True
             )
             for p in res:
                 page_candidates.append((col, p))
 
         if not page_candidates:
-            return []
+            return [{"no_result": True}]
 
         # ======================================================
-        # 2️⃣ DEDUP PAGE (collection + page_id)
+        # 2️⃣ DEDUP PAGE
         # ======================================================
-        seen_pages = set()
+        seen = set()
         unique_pages = []
 
         for col, p in page_candidates:
             pid = p.payload.get("page")
-            if pid is None:
-                continue
             key = f"{col}:{pid}"
-            if key in seen_pages:
+            if key in seen:
                 continue
-            seen_pages.add(key)
+            seen.add(key)
             unique_pages.append((col, p))
 
-        if not unique_pages:
-            return []
-
         # ======================================================
-        # 3️⃣ RERANK PAGE + PAGE THRESHOLD
+        # 3️⃣ RERANK PAGE
         # ======================================================
         page_texts = [p.payload.get("text", "") for _, p in unique_pages]
         page_pairs = [(query, t) for t in page_texts]
-
         page_scores = rank_model.predict(page_pairs, batch_size=4)
 
         ranked_pages = sorted(
@@ -94,16 +88,15 @@ class DOCSearcher:
         ][:self.top_page]
 
         if not ranked_pages:
-            return []
+            return [{"no_result": True}]
 
         # ======================================================
-        # 4️⃣ RERANK CHUNK TRONG PAGE + CHUNK THRESHOLD
+        # 4️⃣ RERANK CHUNK → FLATTEN
         # ======================================================
-        outputs = []
+        flat_chunks = []
+        global_rank = 1
 
-        for rank, (col, page_point, page_score) in enumerate(
-            ranked_pages, start=1
-        ):
+        for col, page_point, page_score in ranked_pages:
             pid = page_point.payload["page"]
             page_text = page_point.payload.get("text", "")
             chunks = page_point.payload.get("chunks", [])
@@ -121,46 +114,46 @@ class DOCSearcher:
                 seen_chunk.add(fp)
                 chunk_texts.append(text)
 
-            ranked_chunks = []
+            if not chunk_texts:
+                continue
 
-            if chunk_texts:
-                chunk_pairs = [(query, t) for t in chunk_texts]
-                chunk_scores = rank_model.predict(chunk_pairs, batch_size=4)
+            chunk_pairs = [(query, t) for t in chunk_texts]
+            chunk_scores = rank_model.predict(chunk_pairs, batch_size=4)
 
-                ranked_chunks = [
-                    (t, s)
-                    for t, s in sorted(
-                        zip(chunk_texts, chunk_scores),
-                        key=lambda x: x[1],
-                        reverse=True
-                    )
-                    if float(s) >= self.chunk_score_threshold
-                ][:self.top_chunk]
+            ranked_chunks = sorted(
+                zip(chunk_texts, chunk_scores),
+                key=lambda x: x[1],
+                reverse=True
+            )
 
-            outputs.append({
-                "rank": rank,
-                "collection": col,
-                "page": pid + 1,
-                "page_score": round(float(page_score), 4),
-                "page_text": highlight_markdown(
-                    page_text,
-                    extract_entities(page_text)
-                ),
-                "chunks": [
-                    {
-                        "rank": i + 1,
-                        "score": round(float(s), 4),
-                        "text": t,
-                        "highlighted_text": highlight_markdown(
-                            t, extract_entities(t)
-                        )
-                    }
-                    for i, (t, s) in enumerate(ranked_chunks)
-                ]
-            })
+            for t, s in ranked_chunks:
+                if float(s) < self.chunk_score_threshold:
+                    continue
+
+                flat_chunks.append({
+                    "rank": global_rank,
+                    "score": round(float(s), 4),
+                    "text": t,
+                    "highlighted_text": highlight_markdown(
+                        t, extract_entities(t)
+                    ),
+                    "entities": extract_entities(t),
+                    "pages": [{
+                        "collection": col,
+                        "page": pid + 1
+                    }],
+                    "is_merged": False
+                })
+
+                global_rank += 1
+                if global_rank > self.top_chunk:
+                    break
+
+        if not flat_chunks:
+            return [{"no_result": True}]
 
         gc.collect()
         if device == "cuda":
             torch.cuda.empty_cache()
 
-        return outputs
+        return flat_chunks
