@@ -136,3 +136,33 @@ class QdrantFileUploader:
             print("Không có page nào được upload")
 
         return collection_name
+    def list_collections(self):
+        """Liệt kê tất cả collections"""
+        try:
+            collections = self.client.get_collections().collections
+            return [c.name for c in collections]
+        except Exception as e:
+            print(f"Error listing collections: {e}")
+            return []
+
+    def load_collection(self, collection_name: str):
+        """Load collection có sẵn"""
+        try:
+            self.client.get_collection(collection_name)
+            print(f"Load collection: {collection_name}")
+            return collection_name
+        except:
+            print(f"Collection '{collection_name}' does not exist.")
+            return None
+
+    def delete_collection(self, name: str) -> bool:
+        """Xóa collection"""
+        collection_name = name if name.startswith("doc_") else f"doc_{name}"
+        try:
+            self.client.get_collection(collection_name)
+            self.client.delete_collection(collection_name)
+            print(f"Deleted collection: {collection_name}")
+            return True
+        except Exception as e:
+            print(f"Failed to delete collection {collection_name}: {e}")
+            return False
