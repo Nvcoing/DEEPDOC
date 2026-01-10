@@ -3,8 +3,8 @@ from pypdf import PdfReader
 from docx import Document
 from pptx import Presentation
 
+
 def load_file_pages(path: str) -> List[str]:
-    """Load file và trả về list các pages"""
     ext = path.split('.')[-1].lower()
 
     if ext == "pdf":
@@ -36,62 +36,50 @@ def load_file_pages(path: str) -> List[str]:
     raise ValueError("Unsupported file")
 
 
-def chunk_pages_smart(pages: List[str]) -> List[Tuple[str, List[int]]]:
+def chunk_pages_smart(
+    pages: List[str],
+    chunk_size: int = 300,
+    overlap: int = 50
+) -> List[Tuple[str, List[int]]]:
     """
-    Chia pages thành chunks với quy tắc:
-    - Mỗi page chia thành 3 chunks (1/3 size)
-    - Nếu chunk overlap sang page khác -> gộp cả 2 pages vào metadata
-    
+    Chunk theo word-level, có overlap và page-aware
+
     Returns:
         List[(chunk_text, [page_ids])]
     """
     all_chunks = []
-    
+
     for page_id, page_text in enumerate(pages):
         if not page_text.strip():
             continue
-            
+
         words = page_text.split()
-        total_words = len(words)
-        
-        if total_words == 0:
-            continue
-        
-        # Chia page thành 3 phần
-        chunk_size = max(total_words // 3, 1)
-        
-        for i in range(3):
-            start_idx = i * chunk_size
-            
-            # Chunk cuối lấy hết phần còn lại
-            if i == 2:
-                end_idx = total_words
-            else:
-                end_idx = start_idx + chunk_size
-            
-            chunk_words = words[start_idx:end_idx]
-            
+        total = len(words)
+        start = 0
+
+        while start < total:
+            end = min(start + chunk_size, total)
+            chunk_words = words[start:end]
+
             if not chunk_words:
-                continue
-            
+                break
+
             chunk_text = " ".join(chunk_words)
-            
-            # Kiểm tra xem chunk có tràn sang page tiếp theo không
             pages_involved = [page_id]
-            
-            # Nếu là chunk cuối của page và có page tiếp theo
-            if i == 2 and page_id + 1 < len(pages):
-                next_page = pages[page_id + 1]
-                next_words = next_page.split()
-                
-                # Lấy thêm 20% từ đầu page tiếp theo (tràn overlap)
-                overlap_size = max(len(next_words) // 5, 10)
-                overlap_words = next_words[:overlap_size]
-                
-                if overlap_words:
-                    chunk_text += " " + " ".join(overlap_words)
+
+            # ===== OVERLAP SANG PAGE TIẾP THEO =====
+            if end == total and page_id + 1 < len(pages):
+                next_words = pages[page_id + 1].split()
+                extra = min(overlap, len(next_words))
+
+                if extra > 0:
+                    chunk_text += " " + " ".join(next_words[:extra])
                     pages_involved.append(page_id + 1)
-            
+
             all_chunks.append((chunk_text.strip(), pages_involved))
-    
+
+            start += chunk_size - overlap
+            if start <= 0:
+                start = end
+
     return all_chunks

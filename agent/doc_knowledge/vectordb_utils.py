@@ -35,7 +35,12 @@ class QdrantFileUploader:
             )
         )
 
-        chunks_with_pages = chunk_pages_smart(pages)
+        chunks_with_pages = chunk_pages_smart(
+            pages,
+            chunk_size=500,
+            overlap=100
+        )
+
         print(f"\nTổng số chunks: {len(chunks_with_pages)}")
 
         page_dict = {}
