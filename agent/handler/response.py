@@ -36,7 +36,7 @@ def answer(question: str, file_names: List[str]) -> str:
         query=question,
         top_chunk=3,
         top_page=5,
-        score_threshold=0.7
+        score_threshold=0.5
     )
 
     final_prompt = f"""
